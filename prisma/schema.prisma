@@ -1,0 +1,153 @@
+// Skema data Aplikasi Bantu Kalkulasi & Penulisan Hasil Kalibrasi Alat Radiologi
+// Referensi: PRD bagian 8 (Struktur Data).
+//
+// DATABASE:
+// Postgres, dipakai baik untuk pengembangan lokal maupun produksi di Vercel,
+// supaya perilaku keduanya persis sama. SQLite tidak dipakai karena filesystem
+// di Vercel bersifat read-only dan sementara — datanya akan hilang.
+// Set DATABASE_URL di .env ke connection string Neon / Vercel Postgres.
+// Lihat PANDUAN_DEPLOY_VERCEL.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Fismed yang memakai aplikasi. Nama + gelar dipakai untuk kolom tanda tangan di PDF.
+model User {
+  id           String   @id @default(cuid())
+  nama         String
+  gelar        String?
+  nip          String?
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  laporan Laporan[]
+}
+
+/// Data instansi/klien. Shared lintas Fismed (PRD 6.1a).
+model Instansi {
+  id               String  @id @default(cuid())
+  namaInstansi     String
+  namaFasilitas    String?
+  identitasPemilik String? // Swasta / Pemerintah / dll
+  alamat           String?
+  kota             String?
+  provinsi         String?
+  telepon          String?
+  email            String?
+  nib              String?
+  nomorIzinPesawat String?
+  namaPPR          String?
+  noSIB            String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  alat    AlatRadiologi[]
+  laporan Laporan[]
+}
+
+/// Asset registry alat radiologi. Konfigurasi teknis disimpan sebagai JSON string
+/// karena field-nya berbeda-beda per jenis alat (PRD 6.1b & 6.2).
+model AlatRadiologi {
+  id            String  @id @default(cuid())
+  instansiId    String
+  jenisAlat     String // key template modalitas, lihat src/lib/templates
+  namaAlat      String?
+  lokasiUnit    String?
+  merk          String?
+  model         String?
+  noSeri        String?
+  tahunProduksi String?
+  konfigurasi   String  @default("{}")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  instansi Instansi  @relation(fields: [instansiId], references: [id], onDelete: Cascade)
+  laporan  Laporan[]
+
+  @@index([instansiId])
+  @@index([jenisAlat])
+}
+
+/// Registry alat ukur (measurement equipment). Shared lintas laporan (PRD 6.1c).
+model AlatUkur {
+  id                  String    @id @default(cuid())
+  nama                String
+  merek               String?
+  modelTipe           String?
+  noSeri              String?
+  tertelusurKe        String?
+  masaKalibrasiSampai DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+
+  laporan LaporanAlatUkur[]
+}
+
+/// Laporan hasil kalibrasi. Seluruh hasil uji per parameter disimpan sebagai JSON
+/// mengikuti skema template modalitas (configurable, bukan hard-code kolom).
+model Laporan {
+  id              String @id @default(cuid())
+  jenisAlat       String
+  nomorLaporan    String?
+  nomorOrder      String?
+  instansiId      String
+  alatRadiologiId String
+  userId          String
+
+  tanggalUji  DateTime
+  tanggalTerbit DateTime?
+  lokasiUji   String?
+  metodeKerja String?
+
+  /// snapshot konfigurasi alat saat laporan dibuat (agar riwayat tidak berubah
+  /// kalau profil alat di-update belakangan)
+  konfigurasiSnapshot String @default("{}")
+
+  /// seluruh hasil uji (termasuk uji kondisi lingkungan), mengikuti skema
+  /// template modalitas di src/lib/templates
+  hasilUji String @default("{}")
+
+  kesimpulan  String?
+  catatan     String?
+  rekomendasi String?
+  status      String  @default("draft") // draft | selesai
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  instansi      Instansi          @relation(fields: [instansiId], references: [id])
+  alatRadiologi AlatRadiologi     @relation(fields: [alatRadiologiId], references: [id])
+  user          User              @relation(fields: [userId], references: [id])
+  alatUkur      LaporanAlatUkur[]
+
+  @@index([userId])
+  @@index([instansiId])
+  @@index([jenisAlat])
+  @@index([tanggalUji])
+}
+
+/// Many-to-many laporan <-> registry alat ukur (PRD 6.1c).
+model LaporanAlatUkur {
+  laporanId  String
+  alatUkurId String
+  urutan     Int    @default(0)
+
+  laporan  Laporan  @relation(fields: [laporanId], references: [id], onDelete: Cascade)
+  alatUkur AlatUkur @relation(fields: [alatUkurId], references: [id], onDelete: Cascade)
+
+  @@id([laporanId, alatUkurId])
+}
