@@ -10,15 +10,15 @@ import type { Prisma } from "@prisma/client";
 export default async function HalamanLaporan({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; jenis?: string; fismed?: string }>;
+  searchParams: Promise<{ q?: string; jenis?: string }>;
 }) {
   const user = await requireUser();
-  const { q, jenis, fismed } = await searchParams;
+  const { q, jenis } = await searchParams;
 
-  // Fismed biasa hanya melihat laporannya sendiri; akun master melihat semua.
+  // Daftar ini selalu berisi laporan milik sendiri saja. Laporan Fismed lain
+  // diakses admin lewat Profil → Fismed.
   const where: Prisma.LaporanWhereInput = { ...filterLaporan(user) };
   if (jenis) where.jenisAlat = jenis;
-  if (fismed) where.userId = fismed;
   if (q) {
     // mode "insensitive" hanya didukung Postgres — pencarian jadi tidak
     // membedakan huruf besar/kecil.
@@ -33,24 +33,18 @@ export default async function HalamanLaporan({
     ];
   }
 
-  const [daftar, fismedList] = await Promise.all([
-    prisma.laporan.findMany({
-      where,
-      orderBy: { tanggalUji: "desc" },
-      include: { instansi: true, alatRadiologi: true, user: true },
-      take: 100,
-    }),
-    // daftar Fismed untuk filter hanya relevan bagi akun master
-    user.admin
-      ? prisma.user.findMany({ orderBy: { nama: "asc" }, select: { id: true, nama: true } })
-      : Promise.resolve([]),
-  ]);
+  const daftar = await prisma.laporan.findMany({
+    where,
+    orderBy: { tanggalUji: "desc" },
+    include: { instansi: true, alatRadiologi: true, user: true },
+    take: 100,
+  });
 
   return (
     <div>
       <JudulHalaman
         judul="Riwayat Laporan"
-        keterangan="Cari berdasarkan klien, nomor laporan, jenis alat, atau Fismed yang mengerjakan."
+        keterangan="Cari berdasarkan klien, nomor laporan, jenis alat, atau nomor seri."
         aksi={
           <Link href="/laporan/baru" className="tombol tombol-utama">
             + Laporan Baru
@@ -79,23 +73,10 @@ export default async function HalamanLaporan({
             ))}
           </select>
         </label>
-        {user.admin && (
-          <label>
-            <span className="mb-1 block text-sm font-medium">Fismed</span>
-            <select name="fismed" defaultValue={fismed ?? ""} className="input-dasar">
-              <option value="">Semua</option>
-              {fismedList.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.nama}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
         <button type="submit" className="tombol tombol-sekunder">
           Cari
         </button>
-        {(q || jenis || fismed) && (
+        {(q || jenis) && (
           <Link href="/laporan" className="tombol tombol-sekunder">
             Reset
           </Link>
@@ -114,7 +95,6 @@ export default async function HalamanLaporan({
                 <th>Jenis Alat</th>
                 <th>Lokasi Unit</th>
                 <th>Tanggal Uji</th>
-                <th>Fismed</th>
                 <th>Status</th>
                 <th className="w-40"></th>
               </tr>
@@ -134,7 +114,6 @@ export default async function HalamanLaporan({
                   <td>{namaJenisAlat(l.jenisAlat)}</td>
                   <td>{l.lokasiUji ?? l.alatRadiologi.lokasiUnit ?? "-"}</td>
                   <td>{tanggalPanjang(l.tanggalUji)}</td>
-                  <td>{l.user.nama}</td>
                   <td>
                     <span
                       className={`rounded px-2 py-0.5 text-xs ${

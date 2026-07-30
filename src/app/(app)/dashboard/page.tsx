@@ -25,7 +25,7 @@ export default async function Dashboard() {
         where: milikLaporan,
         orderBy: { updatedAt: "desc" },
         take: 8,
-        include: { instansi: true, user: true },
+        include: { instansi: true },
       }),
     ]);
 
@@ -33,18 +33,8 @@ export default async function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">
-            Halo, {user.nama}
-            {user.admin && (
-              <span className="ml-2 rounded bg-[var(--brand-soft)] px-2 py-0.5 align-middle text-xs font-medium text-[var(--brand)]">
-                Akun master
-              </span>
-            )}
-          </h1>
+          <h1 className="text-lg font-semibold">Halo, {user.nama}</h1>
           <p className="text-sm text-[var(--muted)]">
-            {user.admin
-              ? "Anda melihat data seluruh Fismed. "
-              : "Anda hanya melihat data yang Anda buat sendiri. "}
             Modalitas tersedia: {TEMPLATES.map((t) => t.nama).join(", ")}.
           </p>
         </div>
@@ -98,7 +88,6 @@ export default async function Dashboard() {
                 <th>Nomor / Instansi</th>
                 <th>Jenis Alat</th>
                 <th>Tanggal Uji</th>
-                <th>Fismed</th>
                 <th className="w-24"></th>
               </tr>
             </thead>
@@ -115,7 +104,6 @@ export default async function Dashboard() {
                   </td>
                   <td>{namaJenisAlat(l.jenisAlat)}</td>
                   <td>{tanggalPanjang(l.tanggalUji)}</td>
-                  <td>{l.user.nama}</td>
                   <td className="text-right">
                     <Link href={`/laporan/${l.id}`} className="text-[var(--brand)] hover:underline">
                       Buka

@@ -18,9 +18,13 @@ declare module "next-auth" {
 }
 
 /**
- * Daftar email akun master, diambil dari environment variable ADMIN_EMAILS
- * (dipisah koma). Sengaja tidak disimpan di database supaya bisa diubah lewat
- * dashboard Vercel tanpa perlu migrasi atau deploy ulang kode.
+ * Daftar email yang dijamin berperan admin, dari environment variable
+ * ADMIN_EMAILS (dipisah koma).
+ *
+ * Peran sesungguhnya disimpan di kolom `User.peran` dan diubah lewat halaman
+ * Profil → Fismed. ADMIN_EMAILS hanya jaring pengaman: email di daftar ini
+ * otomatis dinaikkan jadi admin saat login, sehingga selalu ada admin pertama
+ * dan akses tidak bisa terkunci total.
  */
 function daftarAdmin(): string[] {
   return (process.env.ADMIN_EMAILS ?? "")
@@ -70,33 +74,46 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       if (user) token.uid = (user as { id: string }).id;
-      // Ambil ulang profil dari DB supaya perubahan nama/gelar langsung terpakai
-      // di kolom tanda tangan laporan.
-      if (token.uid && (user || trigger === "update" || !token.nama)) {
-        const db = await prisma.user.findUnique({
+      // Profil dan peran selalu diambil ulang dari database, supaya perubahan
+      // nama/gelar dan naik/turun peran langsung terasa tanpa perlu login ulang.
+      if (token.uid) {
+        let db = await prisma.user.findUnique({
           where: { id: token.uid as string },
         });
-        if (db) {
-          token.nama = db.nama;
-          token.gelar = db.gelar;
-          token.nip = db.nip;
-          token.email = db.email;
+
+        // Jaring pengaman: email di ADMIN_EMAILS dipastikan berperan admin.
+        // Gunanya agar selalu ada admin pertama, dan agar akses tidak terkunci
+        // seandainya seluruh admin tanpa sengaja diturunkan perannya.
+        if (db && db.peran !== "admin" && emailAdalahAdmin(db.email)) {
+          db = await prisma.user.update({
+            where: { id: db.id },
+            data: { peran: "admin" },
+          });
         }
+
+        // Akun sudah tidak ada di database — batalkan sesinya, jangan biarkan
+        // cookie lama tetap berlaku.
+        if (!db) return null;
+
+        token.nama = db.nama;
+        token.gelar = db.gelar;
+        token.nip = db.nip;
+        token.email = db.email;
+        token.peran = db.peran;
       }
       return token;
     },
     async session({ session, token }) {
-      const email = (token.email as string) ?? "";
       session.user = {
         ...session.user,
         id: token.uid as string,
         nama: (token.nama as string) ?? "",
         gelar: (token.gelar as string | null) ?? null,
         nip: (token.nip as string | null) ?? null,
-        email,
-        admin: emailAdalahAdmin(email),
+        email: (token.email as string) ?? "",
+        admin: token.peran === "admin",
       };
       return session;
     },

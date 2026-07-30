@@ -3,13 +3,16 @@ import { notFound } from "next/navigation";
 /**
  * Aturan kepemilikan data.
  *
- * Setiap Fismed hanya melihat dan mengubah data yang dia buat sendiri —
- * instansi, alat radiologi, alat ukur, dan laporan. Akun master (lihat
- * ADMIN_EMAILS di src/auth.ts) melihat dan bisa mengubah data milik semua
- * Fismed.
+ * Dua hal yang sengaja dipisah:
  *
- * Kolom kepemiliknya sudah ada di skema sejak awal: `createdById` untuk data
- * master, dan `userId` untuk laporan.
+ * 1. **Daftar** (dashboard, riwayat laporan, data master) selalu menampilkan
+ *    milik sendiri saja — termasuk untuk admin. Ruang kerja tiap Fismed tetap
+ *    bersih dan tidak tercampur data orang lain.
+ * 2. **Akses satuan** — admin tetap boleh membuka dan mengubah satu data milik
+ *    Fismed lain. Pintu masuknya lewat Profil → Fismed, bukan lewat daftar
+ *    miliknya sendiri.
+ *
+ * Kolom kepemilikannya: `createdById` untuk data master, `userId` untuk laporan.
  */
 
 export type Pengguna = {
@@ -17,17 +20,25 @@ export type Pengguna = {
   admin: boolean;
 };
 
-/** Filter Prisma untuk data master (instansi, alat radiologi, alat ukur). */
+/** Filter daftar data master (instansi, alat radiologi, alat ukur) milik sendiri. */
 export function filterMilik(user: Pengguna) {
-  return user.admin ? {} : { createdById: user.id };
+  return { createdById: user.id };
 }
 
-/** Filter Prisma untuk laporan. */
+/** Filter daftar laporan milik sendiri. */
 export function filterLaporan(user: Pengguna) {
-  return user.admin ? {} : { userId: user.id };
+  return { userId: user.id };
 }
 
-/** Apakah pengguna boleh membuka/mengubah data dengan pemilik tertentu. */
+/** Filter data master milik Fismed tertentu — hanya dipakai di halaman admin. */
+export function filterMilikPengguna(penggunaId: string) {
+  return { createdById: penggunaId };
+}
+
+/**
+ * Apakah pengguna boleh membuka/mengubah satu data dengan pemilik tertentu.
+ * Admin boleh atas data siapa pun.
+ */
 export function boleh(user: Pengguna, pemilikId: string | null | undefined) {
   return user.admin || (pemilikId != null && pemilikId === user.id);
 }
@@ -40,4 +51,9 @@ export function boleh(user: Pengguna, pemilikId: string | null | undefined) {
  */
 export function pastikanBoleh(user: Pengguna, pemilikId: string | null | undefined) {
   if (!boleh(user, pemilikId)) notFound();
+}
+
+/** Halaman khusus admin — selain admin diperlakukan seolah halamannya tidak ada. */
+export function pastikanAdmin(user: Pengguna) {
+  if (!user.admin) notFound();
 }

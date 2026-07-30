@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { boleh, filterMilik } from "@/lib/akses";
+import { boleh, filterMilikPengguna } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
@@ -87,12 +87,13 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
     }
   }
 
-  // Hanya alat ukur yang boleh diakses pengguna ini yang diterima, supaya
-  // request langsung tidak bisa menautkan alat ukur milik Fismed lain.
+  // Alat ukur yang boleh ditautkan adalah milik pemilik laporan. Divalidasi
+  // ulang di server supaya request langsung tidak bisa menautkan alat ukur
+  // milik Fismed lain.
   const dimintaIds = fd.getAll("alatUkurId").map(String).filter(Boolean);
   const alatUkurIds = (
     await prisma.alatUkur.findMany({
-      where: { ...filterMilik(user), id: { in: dimintaIds } },
+      where: { ...filterMilikPengguna(laporan.userId), id: { in: dimintaIds } },
       select: { id: true },
     })
   ).map((a) => a.id);

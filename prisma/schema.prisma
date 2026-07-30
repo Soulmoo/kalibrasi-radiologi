@@ -25,8 +25,13 @@ model User {
   nip          String?
   email        String   @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  /// "fismed" (default) atau "admin". Akun admin bisa melihat laporan seluruh
+  /// Fismed dan mengubah peran akun lain lewat halaman Profil → Fismed.
+  peran String @default("fismed")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   laporan Laporan[]
 }

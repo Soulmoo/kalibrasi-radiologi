@@ -213,36 +213,51 @@ Migrasi database dijalankan otomatis saat build lewat script `vercel-build` di
 `package.json` (`prisma generate && prisma migrate deploy && next build`), jadi tidak
 perlu menjalankan `prisma migrate deploy` manual ke produksi.
 
-## Kepemilikan data & akun master
+## Kepemilikan data, peran, & halaman admin
 
-Setiap Fismed **hanya melihat dan mengubah data yang dia buat sendiri** — instansi, alat
-radiologi, alat ukur, dan laporan. Akun baru mulai dari keadaan kosong.
+Setiap Fismed **hanya melihat data yang dia buat sendiri** — instansi, alat radiologi,
+alat ukur, dan laporan. Akun baru mulai dari keadaan kosong. Ini berlaku juga untuk admin:
+dashboard dan daftar riwayat tetap berisi pekerjaan sendiri, supaya ruang kerjanya tidak
+tercampur.
 
-Akun master melihat dan bisa mengubah data seluruh Fismed. Daftarnya diatur lewat
-environment variable, dipisah koma:
+Akses lintas Fismed ada di satu tempat saja: **Profil → Fismed** (hanya muncul untuk
+admin). Di sana tersedia daftar seluruh akun, tombol naik/turun peran, dan halaman per
+Fismed yang menampilkan laporan apa saja yang sudah dia kalibrasi beserta tautan untuk
+membuka dan mencetaknya.
 
-```
-ADMIN_EMAILS="email.master@contoh.com,email.kedua@contoh.com"
-```
+### Peran
 
-Sengaja tidak disimpan di database supaya bisa diubah dari dashboard Vercel tanpa migrasi.
-Perubahannya berlaku setelah pengguna memuat ulang halaman.
+Disimpan di kolom `User.peran` (`"fismed"` atau `"admin"`) dan diubah lewat UI.
+`ADMIN_EMAILS` (dipisah koma) hanya **jaring pengaman**: email di daftar itu otomatis
+dinaikkan jadi admin saat login, sehingga selalu ada admin pertama dan akses tidak bisa
+terkunci total kalau semua admin tidak sengaja diturunkan.
 
-Aturannya ditegakkan di dua lapis, dan keduanya wajib ada:
+Seorang admin tidak bisa mengubah perannya sendiri dari halaman itu — mencegah kondisi
+tanpa admin tersisa.
 
-1. **Query** — daftar dan detail disaring lewat `filterMilik()` / `filterLaporan()` di
-   `src/lib/akses.ts`. Membuka data milik orang lain menghasilkan 404, bukan 403, supaya
-   keberadaan datanya tidak bocor lewat perbedaan pesan.
-2. **Server action** — tiap simpan/hapus memverifikasi kepemilikan lagi dengan `boleh()`.
-   Lapis ini yang sebenarnya mengamankan: server action bisa dipanggil lewat request
-   langsung tanpa melalui tombol di layar.
+### Penegakan aturan
 
-Kepemilikan laporan tidak berpindah saat disunting, termasuk oleh akun master — nama
-Fismed pembuatnya tetap yang tercetak di kolom tanda tangan.
+Tiga lapis, dan ketiganya wajib:
+
+1. **Daftar** — `filterMilik()` / `filterLaporan()` di `src/lib/akses.ts` selalu menyaring
+   ke milik sendiri.
+2. **Akses satuan** — `boleh()` memberi admin izin membuka/mengubah satu data milik
+   Fismed lain. Data yang bukan haknya menghasilkan 404, bukan 403, supaya keberadaannya
+   tidak bocor lewat perbedaan pesan.
+3. **Server action** — tiap simpan/hapus memverifikasi ulang kepemilikan. Lapis ini yang
+   sebenarnya mengamankan, karena server action bisa dipanggil lewat request langsung
+   tanpa melalui tombol di layar.
+
+Dua hal yang mudah terlewat dan sudah ditangani:
+
+- Kepemilikan laporan **tidak berpindah** saat disunting, termasuk oleh admin — nama
+  Fismed pembuatnya tetap yang tercetak di kolom tanda tangan.
+- Pilihan alat ukur pada form laporan mengikuti registry **pemilik laporan**, bukan
+  pengguna yang membuka. Tanpa ini, alat ukur yang sudah tercatat akan terhapus begitu
+  admin menyimpan laporan Fismed lain.
 
 Ini mengubah keputusan PRD bagian 4 yang semula menetapkan data master bersifat bersama
-lintas Fismed. Kalau nanti ingin dikembalikan, cukup buat `filterMilik()` dan
-`filterLaporan()` selalu mengembalikan `{}`.
+lintas Fismed.
 
 ### Menambah Google sign-in / OTP
 

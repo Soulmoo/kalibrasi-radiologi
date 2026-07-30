@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hapusLaporan } from "@/app/actions/laporan";
 import { JudulHalaman } from "@/components/field";
-import { filterMilik, pastikanBoleh } from "@/lib/akses";
+import { filterMilikPengguna, pastikanBoleh } from "@/lib/akses";
 import { tanggalInput } from "@/lib/format";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
@@ -20,23 +20,25 @@ export default async function HalamanLaporan({
   const user = await requireUser();
   const { id } = await params;
 
-  const [laporan, alatUkur] = await Promise.all([
-    prisma.laporan.findUnique({
-      where: { id },
-      include: {
-        instansi: true,
-        alatRadiologi: true,
-        alatUkur: { orderBy: { urutan: "asc" } },
-      },
-    }),
-    prisma.alatUkur.findMany({
-      where: filterMilik(user),
-      orderBy: { nama: "asc" },
-    }),
-  ]);
+  const laporan = await prisma.laporan.findUnique({
+    where: { id },
+    include: {
+      instansi: true,
+      alatRadiologi: true,
+      alatUkur: { orderBy: { urutan: "asc" } },
+    },
+  });
 
   if (!laporan) notFound();
   pastikanBoleh(user, laporan.userId);
+
+  // Registry alat ukur mengikuti pemilik laporan, bukan pengguna yang membuka —
+  // supaya saat admin menyunting laporan Fismed lain, alat ukur yang sudah
+  // tercatat tidak hilang dan pilihannya tetap masuk akal.
+  const alatUkur = await prisma.alatUkur.findMany({
+    where: filterMilikPengguna(laporan.userId),
+    orderBy: { nama: "asc" },
+  });
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) {
