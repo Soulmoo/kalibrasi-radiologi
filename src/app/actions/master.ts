@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { boleh } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
@@ -48,6 +49,9 @@ export async function simpanInstansi(
   };
 
   if (id) {
+    const ada = await prisma.instansi.findUnique({ where: { id } });
+    if (!ada) return { error: "Instansi tidak ditemukan" };
+    if (!boleh(user, ada.createdById)) return { error: "Anda tidak berhak mengubah data ini" };
     await prisma.instansi.update({ where: { id }, data });
   } else {
     await prisma.instansi.create({ data: { ...data, createdById: user.id } });
@@ -58,8 +62,12 @@ export async function simpanInstansi(
 }
 
 export async function hapusInstansi(fd: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(fd.get("id") ?? "");
+
+  const ada = await prisma.instansi.findUnique({ where: { id } });
+  if (!ada || !boleh(user, ada.createdById)) redirect("/instansi?error=terlarang");
+
   const jumlahLaporan = await prisma.laporan.count({ where: { instansiId: id } });
   if (jumlahLaporan > 0) {
     redirect("/instansi?error=terpakai");
@@ -81,6 +89,12 @@ export async function simpanAlat(_prev: AksiState, fd: FormData): Promise<AksiSt
 
   const template = getTemplate(jenisAlat);
   if (!template) return { error: "Jenis alat tidak dikenali" };
+
+  // Alat hanya boleh ditautkan ke instansi milik sendiri.
+  const instansi = await prisma.instansi.findUnique({ where: { id: instansiId } });
+  if (!instansi || !boleh(user, instansi.createdById)) {
+    return { error: "Instansi tidak ditemukan atau bukan milik Anda" };
+  }
 
   // Kumpulkan seluruh field konfigurasi sesuai template modalitas.
   const konfigurasi: Record<string, string | string[]> = {};
@@ -107,6 +121,9 @@ export async function simpanAlat(_prev: AksiState, fd: FormData): Promise<AksiSt
   };
 
   if (id) {
+    const ada = await prisma.alatRadiologi.findUnique({ where: { id } });
+    if (!ada) return { error: "Alat tidak ditemukan" };
+    if (!boleh(user, ada.createdById)) return { error: "Anda tidak berhak mengubah data ini" };
     await prisma.alatRadiologi.update({ where: { id }, data });
   } else {
     await prisma.alatRadiologi.create({ data: { ...data, createdById: user.id } });
@@ -117,8 +134,12 @@ export async function simpanAlat(_prev: AksiState, fd: FormData): Promise<AksiSt
 }
 
 export async function hapusAlat(fd: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(fd.get("id") ?? "");
+
+  const ada = await prisma.alatRadiologi.findUnique({ where: { id } });
+  if (!ada || !boleh(user, ada.createdById)) redirect("/alat?error=terlarang");
+
   const jumlahLaporan = await prisma.laporan.count({ where: { alatRadiologiId: id } });
   if (jumlahLaporan > 0) {
     redirect("/alat?error=terpakai");
@@ -148,6 +169,9 @@ export async function simpanAlatUkur(
   };
 
   if (id) {
+    const ada = await prisma.alatUkur.findUnique({ where: { id } });
+    if (!ada) return { error: "Alat ukur tidak ditemukan" };
+    if (!boleh(user, ada.createdById)) return { error: "Anda tidak berhak mengubah data ini" };
     await prisma.alatUkur.update({ where: { id }, data });
   } else {
     await prisma.alatUkur.create({ data: { ...data, createdById: user.id } });
@@ -158,8 +182,12 @@ export async function simpanAlatUkur(
 }
 
 export async function hapusAlatUkur(fd: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(fd.get("id") ?? "");
+
+  const ada = await prisma.alatUkur.findUnique({ where: { id } });
+  if (!ada || !boleh(user, ada.createdById)) redirect("/alat-ukur?error=terlarang");
+
   await prisma.alatUkur.delete({ where: { id } });
   revalidatePath("/alat-ukur");
 }

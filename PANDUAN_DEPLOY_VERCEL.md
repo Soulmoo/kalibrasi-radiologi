@@ -235,6 +235,7 @@ Refresh halaman repo. Kalau file-file proyek sudah muncul, berhasil.
    | `DATABASE_URL` | connection string Postgres dari Langkah 2 |
    | `AUTH_SECRET` | hasil acak dari Langkah 3 |
    | `AUTH_TRUST_HOST` | `true` |
+   | `ADMIN_EMAILS` | email akun master Anda (boleh lebih dari satu, dipisah koma) |
 
    Kalau tadi memakai Jalur A dan database sudah di-*connect* ke project ini,
    `DATABASE_URL` mungkin sudah terisi sendiri — cukup pastikan namanya persis
@@ -314,22 +315,21 @@ terpakai — Deployments → klik yang terakhir → **Redeploy**.
 
 ## Catatan penting sebelum dibagikan luas
 
-Aplikasi ini memakai pendaftaran mandiri dan data master bersama, sesuai PRD.
-Konsekuensinya: **siapa pun yang tahu alamatnya bisa mendaftar, lalu melihat dan
-mengubah seluruh data instansi, alat, dan laporan** yang ada di sana — termasuk
-laporan yang dibuat orang lain.
+Pendaftaran bersifat mandiri: siapa pun yang tahu alamatnya bisa membuat akun.
 
-Untuk demo dengan data contoh, itu tidak masalah. Tapi kalau nanti diisi data
-kalibrasi RS yang sebenarnya, sebaiknya ditambahkan pembatas dulu, misalnya:
+Sejak pemisahan data per akun diterapkan, akun baru **hanya melihat data buatannya
+sendiri** dan tidak bisa menyentuh data Fismed lain. Jadi orang asing yang mendaftar
+hanya mendapat halaman kosong — tidak bisa melihat maupun mengubah laporan Anda.
+
+Yang masih terbuka: siapa pun tetap bisa **membuat akun** dan memakai aplikasinya
+untuk datanya sendiri. Kalau itu tidak dikehendaki, tambahkan pembatas:
 
 - kode undangan yang harus diisi saat mendaftar,
 - pembatasan domain email yang boleh mendaftar, atau
 - Vercel **Deployment Protection** (Settings → Deployment Protection → Password
-  Protection) supaya seluruh situs perlu kata sandi untuk dibuka.
-
-Yang paling cepat adalah Deployment Protection, karena tidak perlu ubah kode sama
-sekali — tapi perlu paket Vercel Pro untuk Password Protection pada production
-deployment.
+  Protection) supaya seluruh situs perlu kata sandi untuk dibuka. Ini yang paling
+  cepat karena tidak perlu ubah kode, tapi Password Protection pada production
+  deployment memerlukan paket Vercel Pro.
 
 Ingat juga bahwa laporan yang dihasilkan aplikasi ini berstatus laporan kerja
 internal, bukan sertifikat resmi berlegalitas BAPETEN/BPAFK.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { filterLaporan, filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { TEMPLATES, namaJenisAlat } from "@/lib/templates";
@@ -7,17 +8,21 @@ import { tanggalPanjang } from "@/lib/format";
 export default async function Dashboard() {
   const user = await requireUser();
 
+  const milik = filterMilik(user);
+  const milikLaporan = filterLaporan(user);
+
   const [jumlahLaporan, jumlahInstansi, jumlahAlat, alatUkurKadaluarsa, terbaru] =
     await Promise.all([
-      prisma.laporan.count(),
-      prisma.instansi.count(),
-      prisma.alatRadiologi.count(),
+      prisma.laporan.count({ where: milikLaporan }),
+      prisma.instansi.count({ where: milik }),
+      prisma.alatRadiologi.count({ where: milik }),
       prisma.alatUkur.findMany({
-        where: { masaKalibrasiSampai: { lt: new Date() } },
+        where: { ...milik, masaKalibrasiSampai: { lt: new Date() } },
         orderBy: { masaKalibrasiSampai: "asc" },
         take: 5,
       }),
       prisma.laporan.findMany({
+        where: milikLaporan,
         orderBy: { updatedAt: "desc" },
         take: 8,
         include: { instansi: true, user: true },
@@ -28,8 +33,18 @@ export default async function Dashboard() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold">Halo, {user.nama}</h1>
+          <h1 className="text-lg font-semibold">
+            Halo, {user.nama}
+            {user.admin && (
+              <span className="ml-2 rounded bg-[var(--brand-soft)] px-2 py-0.5 align-middle text-xs font-medium text-[var(--brand)]">
+                Akun master
+              </span>
+            )}
+          </h1>
           <p className="text-sm text-[var(--muted)]">
+            {user.admin
+              ? "Anda melihat data seluruh Fismed. "
+              : "Anda hanya melihat data yang Anda buat sendiri. "}
             Modalitas tersedia: {TEMPLATES.map((t) => t.nama).join(", ")}.
           </p>
         </div>

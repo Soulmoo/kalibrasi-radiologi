@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { JudulHalaman } from "@/components/field";
+import { filterMilik, pastikanBoleh } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { parseJson } from "@/lib/json";
@@ -10,18 +11,20 @@ export default async function UbahAlat({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
 
   const [alat, instansi] = await Promise.all([
     prisma.alatRadiologi.findUnique({ where: { id } }),
     prisma.instansi.findMany({
+      where: filterMilik(user),
       orderBy: { namaInstansi: "asc" },
       select: { id: true, namaInstansi: true, namaFasilitas: true },
     }),
   ]);
 
   if (!alat) notFound();
+  pastikanBoleh(user, alat.createdById);
 
   return (
     <div className="max-w-4xl">

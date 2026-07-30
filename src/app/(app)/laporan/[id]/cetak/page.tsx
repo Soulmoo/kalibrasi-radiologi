@@ -9,6 +9,7 @@ import {
 import { namaLengkap, tanggalPanjang, teksAtauStrip } from "@/lib/format";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
+import { pastikanBoleh } from "@/lib/akses";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
 import { KETERANGAN_KETIDAKPASTIAN } from "@/lib/templates/common";
@@ -20,7 +21,7 @@ export default async function CetakLaporan({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
 
   const laporan = await prisma.laporan.findUnique({
@@ -33,6 +34,7 @@ export default async function CetakLaporan({
     },
   });
   if (!laporan) notFound();
+  pastikanBoleh(user, laporan.userId);
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) notFound();

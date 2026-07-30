@@ -1,13 +1,22 @@
 import Link from "next/link";
 import { hapusAlatUkur } from "@/app/actions/master";
 import { JudulHalaman, KosongPesan } from "@/components/field";
+import { filterMilik } from "@/lib/akses";
 import { tanggalPanjang } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 
-export default async function HalamanAlatUkur() {
-  await requireUser();
-  const daftar = await prisma.alatUkur.findMany({ orderBy: { nama: "asc" } });
+export default async function HalamanAlatUkur({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const user = await requireUser();
+  const { error } = await searchParams;
+  const daftar = await prisma.alatUkur.findMany({
+    where: filterMilik(user),
+    orderBy: { nama: "asc" },
+  });
   const sekarang = new Date();
 
   return (
@@ -21,6 +30,12 @@ export default async function HalamanAlatUkur() {
           </Link>
         }
       />
+
+      {error === "terlarang" && (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Alat ukur tersebut bukan milik Anda, jadi tidak bisa dihapus.
+        </p>
+      )}
 
       <div className="kartu overflow-hidden">
         {daftar.length === 0 ? (

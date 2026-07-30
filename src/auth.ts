@@ -11,8 +11,27 @@ declare module "next-auth" {
       gelar: string | null;
       nip: string | null;
       email: string;
+      /** akun master: bisa melihat & mengubah data milik semua Fismed */
+      admin: boolean;
     };
   }
+}
+
+/**
+ * Daftar email akun master, diambil dari environment variable ADMIN_EMAILS
+ * (dipisah koma). Sengaja tidak disimpan di database supaya bisa diubah lewat
+ * dashboard Vercel tanpa perlu migrasi atau deploy ulang kode.
+ */
+function daftarAdmin(): string[] {
+  return (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function emailAdalahAdmin(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return daftarAdmin().includes(email.trim().toLowerCase());
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -69,13 +88,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token;
     },
     async session({ session, token }) {
+      const email = (token.email as string) ?? "";
       session.user = {
         ...session.user,
         id: token.uid as string,
         nama: (token.nama as string) ?? "",
         gelar: (token.gelar as string | null) ?? null,
         nip: (token.nip as string | null) ?? null,
-        email: (token.email as string) ?? "",
+        email,
+        admin: emailAdalahAdmin(email),
       };
       return session;
     },

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { hapusInstansi } from "@/app/actions/master";
 import { JudulHalaman, KosongPesan } from "@/components/field";
+import { filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 
@@ -9,10 +10,11 @@ export default async function HalamanInstansi({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { error } = await searchParams;
 
   const daftar = await prisma.instansi.findMany({
+    where: filterMilik(user),
     orderBy: { namaInstansi: "asc" },
     include: { _count: { select: { alat: true, laporan: true } } },
   });
@@ -28,6 +30,12 @@ export default async function HalamanInstansi({
           </Link>
         }
       />
+
+      {error === "terlarang" && (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Data tersebut bukan milik Anda, jadi tidak bisa dihapus.
+        </p>
+      )}
 
       {error === "terpakai" && (
         <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">

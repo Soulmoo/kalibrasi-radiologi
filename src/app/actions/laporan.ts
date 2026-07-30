@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { boleh, filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
@@ -32,6 +33,9 @@ export async function buatLaporan(_prev: AksiState, fd: FormData): Promise<AksiS
     where: { id: alatRadiologiId },
   });
   if (!alat) return { error: "Alat radiologi tidak ditemukan" };
+  if (!boleh(user, alat.createdById)) {
+    return { error: "Alat radiologi ini bukan milik Anda" };
+  }
 
   const template = getTemplate(alat.jenisAlat);
   if (!template) return { error: "Template untuk jenis alat ini belum tersedia" };
@@ -67,6 +71,9 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
 
   const laporan = await prisma.laporan.findUnique({ where: { id } });
   if (!laporan) return { error: "Laporan tidak ditemukan" };
+  if (!boleh(user, laporan.userId)) {
+    return { error: "Anda tidak berhak mengubah laporan ini" };
+  }
 
   // Hasil uji dikirim sebagai satu payload JSON dari form klien.
   let hasilUji = laporan.hasilUji;
@@ -80,7 +87,15 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
     }
   }
 
-  const alatUkurIds = fd.getAll("alatUkurId").map(String).filter(Boolean);
+  // Hanya alat ukur yang boleh diakses pengguna ini yang diterima, supaya
+  // request langsung tidak bisa menautkan alat ukur milik Fismed lain.
+  const dimintaIds = fd.getAll("alatUkurId").map(String).filter(Boolean);
+  const alatUkurIds = (
+    await prisma.alatUkur.findMany({
+      where: { ...filterMilik(user), id: { in: dimintaIds } },
+      select: { id: true },
+    })
+  ).map((a) => a.id);
 
   await prisma.$transaction([
     prisma.laporan.update({
@@ -97,9 +112,9 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
         rekomendasi: teks(fd, "rekomendasi"),
         status: teks(fd, "status") === "selesai" ? "selesai" : "draft",
         hasilUji,
-        // laporan selalu tertaut ke Fismed yang terakhir mengerjakannya,
-        // karena namanya yang tercetak di kolom tanda tangan
-        userId: user.id,
+        // Kepemilikan laporan tidak dipindahkan saat disunting — nama Fismed
+        // pembuatnya tetap yang tercetak di kolom tanda tangan, dan laporan
+        // tidak berpindah dari daftar miliknya ketika akun master membukanya.
       },
     }),
     prisma.laporanAlatUkur.deleteMany({ where: { laporanId: id } }),
@@ -118,8 +133,12 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
 }
 
 export async function hapusLaporan(fd: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const id = String(fd.get("id") ?? "");
+
+  const ada = await prisma.laporan.findUnique({ where: { id } });
+  if (!ada || !boleh(user, ada.userId)) redirect("/laporan");
+
   await prisma.laporan.delete({ where: { id } });
   revalidatePath("/laporan");
   redirect("/laporan");

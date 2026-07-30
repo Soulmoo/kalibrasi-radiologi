@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { JudulHalaman } from "@/components/field";
+import { filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { namaJenisAlat } from "@/lib/templates";
 import { FormLaporanBaru } from "./form";
 
 export default async function LaporanBaru() {
-  await requireUser();
+  const user = await requireUser();
 
   const alat = await prisma.alatRadiologi.findMany({
+    where: filterMilik(user),
     orderBy: [{ instansi: { namaInstansi: "asc" } }, { jenisAlat: "asc" }],
     include: { instansi: true },
   });

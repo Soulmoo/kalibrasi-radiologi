@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { JudulHalaman, KosongPesan } from "@/components/field";
+import { filterLaporan } from "@/lib/akses";
 import { tanggalPanjang } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
@@ -11,10 +12,11 @@ export default async function HalamanLaporan({
 }: {
   searchParams: Promise<{ q?: string; jenis?: string; fismed?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { q, jenis, fismed } = await searchParams;
 
-  const where: Prisma.LaporanWhereInput = {};
+  // Fismed biasa hanya melihat laporannya sendiri; akun master melihat semua.
+  const where: Prisma.LaporanWhereInput = { ...filterLaporan(user) };
   if (jenis) where.jenisAlat = jenis;
   if (fismed) where.userId = fismed;
   if (q) {
@@ -38,7 +40,10 @@ export default async function HalamanLaporan({
       include: { instansi: true, alatRadiologi: true, user: true },
       take: 100,
     }),
-    prisma.user.findMany({ orderBy: { nama: "asc" }, select: { id: true, nama: true } }),
+    // daftar Fismed untuk filter hanya relevan bagi akun master
+    user.admin
+      ? prisma.user.findMany({ orderBy: { nama: "asc" }, select: { id: true, nama: true } })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -74,17 +79,19 @@ export default async function HalamanLaporan({
             ))}
           </select>
         </label>
-        <label>
-          <span className="mb-1 block text-sm font-medium">Fismed</span>
-          <select name="fismed" defaultValue={fismed ?? ""} className="input-dasar">
-            <option value="">Semua</option>
-            {fismedList.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.nama}
-              </option>
-            ))}
-          </select>
-        </label>
+        {user.admin && (
+          <label>
+            <span className="mb-1 block text-sm font-medium">Fismed</span>
+            <select name="fismed" defaultValue={fismed ?? ""} className="input-dasar">
+              <option value="">Semua</option>
+              {fismedList.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.nama}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="submit" className="tombol tombol-sekunder">
           Cari
         </button>

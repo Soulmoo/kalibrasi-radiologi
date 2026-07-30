@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hapusLaporan } from "@/app/actions/laporan";
 import { JudulHalaman } from "@/components/field";
+import { filterMilik, pastikanBoleh } from "@/lib/akses";
 import { tanggalInput } from "@/lib/format";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
@@ -16,7 +17,7 @@ export default async function HalamanLaporan({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
 
   const [laporan, alatUkur] = await Promise.all([
@@ -28,10 +29,14 @@ export default async function HalamanLaporan({
         alatUkur: { orderBy: { urutan: "asc" } },
       },
     }),
-    prisma.alatUkur.findMany({ orderBy: { nama: "asc" } }),
+    prisma.alatUkur.findMany({
+      where: filterMilik(user),
+      orderBy: { nama: "asc" },
+    }),
   ]);
 
   if (!laporan) notFound();
+  pastikanBoleh(user, laporan.userId);
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) {

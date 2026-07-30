@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { hapusAlat } from "@/app/actions/master";
 import { JudulHalaman, KosongPesan } from "@/components/field";
+import { filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { namaJenisAlat } from "@/lib/templates";
@@ -10,15 +11,17 @@ export default async function HalamanAlat({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { error } = await searchParams;
+  const milik = filterMilik(user);
 
   const [daftar, jumlahInstansi] = await Promise.all([
     prisma.alatRadiologi.findMany({
+      where: milik,
       orderBy: [{ instansi: { namaInstansi: "asc" } }, { jenisAlat: "asc" }],
       include: { instansi: true, _count: { select: { laporan: true } } },
     }),
-    prisma.instansi.count(),
+    prisma.instansi.count({ where: milik }),
   ]);
 
   return (
@@ -34,6 +37,12 @@ export default async function HalamanAlat({
           ) : null
         }
       />
+
+      {error === "terlarang" && (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Data tersebut bukan milik Anda, jadi tidak bisa dihapus.
+        </p>
+      )}
 
       {error === "terpakai" && (
         <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">

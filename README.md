@@ -213,11 +213,36 @@ Migrasi database dijalankan otomatis saat build lewat script `vercel-build` di
 `package.json` (`prisma generate && prisma migrate deploy && next build`), jadi tidak
 perlu menjalankan `prisma migrate deploy` manual ke produksi.
 
-**Catatan keamanan.** Aplikasi ini memakai pendaftaran mandiri dan data master bersama
-sesuai PRD, sehingga siapa pun yang tahu alamatnya bisa mendaftar lalu melihat dan
-mengubah seluruh data yang ada. Untuk demo dengan data contoh hal ini tidak masalah,
-tetapi sebelum diisi data kalibrasi RS yang sebenarnya perlu ditambahkan pembatas —
-lihat bagian terakhir panduan deploy.
+## Kepemilikan data & akun master
+
+Setiap Fismed **hanya melihat dan mengubah data yang dia buat sendiri** — instansi, alat
+radiologi, alat ukur, dan laporan. Akun baru mulai dari keadaan kosong.
+
+Akun master melihat dan bisa mengubah data seluruh Fismed. Daftarnya diatur lewat
+environment variable, dipisah koma:
+
+```
+ADMIN_EMAILS="email.master@contoh.com,email.kedua@contoh.com"
+```
+
+Sengaja tidak disimpan di database supaya bisa diubah dari dashboard Vercel tanpa migrasi.
+Perubahannya berlaku setelah pengguna memuat ulang halaman.
+
+Aturannya ditegakkan di dua lapis, dan keduanya wajib ada:
+
+1. **Query** — daftar dan detail disaring lewat `filterMilik()` / `filterLaporan()` di
+   `src/lib/akses.ts`. Membuka data milik orang lain menghasilkan 404, bukan 403, supaya
+   keberadaan datanya tidak bocor lewat perbedaan pesan.
+2. **Server action** — tiap simpan/hapus memverifikasi kepemilikan lagi dengan `boleh()`.
+   Lapis ini yang sebenarnya mengamankan: server action bisa dipanggil lewat request
+   langsung tanpa melalui tombol di layar.
+
+Kepemilikan laporan tidak berpindah saat disunting, termasuk oleh akun master — nama
+Fismed pembuatnya tetap yang tercetak di kolom tanda tangan.
+
+Ini mengubah keputusan PRD bagian 4 yang semula menetapkan data master bersifat bersama
+lintas Fismed. Kalau nanti ingin dikembalikan, cukup buat `filterMilik()` dan
+`filterLaporan()` selalu mengembalikan `{}`.
 
 ### Menambah Google sign-in / OTP
 
