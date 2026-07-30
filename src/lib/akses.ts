@@ -17,7 +17,10 @@ import { notFound } from "next/navigation";
 
 export type Pengguna = {
   id: string;
+  /** admin atau master — boleh membuka data Fismed lain */
   admin: boolean;
+  /** master — boleh mengatur peran & menghapus akun */
+  master: boolean;
 };
 
 /** Filter daftar data master (instansi, alat radiologi, alat ukur) milik sendiri. */
@@ -53,7 +56,12 @@ export function pastikanBoleh(user: Pengguna, pemilikId: string | null | undefin
   if (!boleh(user, pemilikId)) notFound();
 }
 
-/** Halaman khusus admin — selain admin diperlakukan seolah halamannya tidak ada. */
+/** Halaman khusus admin & master — selainnya diperlakukan seolah tidak ada. */
 export function pastikanAdmin(user: Pengguna) {
   if (!user.admin) notFound();
+}
+
+/** Halaman/aksi khusus master, mis. mengatur peran dan menghapus akun. */
+export function pastikanMaster(user: Pengguna) {
+  if (!user.master) notFound();
 }

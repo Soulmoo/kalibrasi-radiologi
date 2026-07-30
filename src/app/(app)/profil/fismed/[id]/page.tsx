@@ -1,21 +1,34 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { hapusAkun } from "@/app/actions/pengguna";
 import { KosongPesan } from "@/components/field";
 import { pastikanAdmin } from "@/lib/akses";
 import { tanggalPanjang } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { emailMaster, labelPeran } from "@/lib/peran";
 import { namaJenisAlat } from "@/lib/templates";
+
+const PESAN_HAPUS: Record<string, string> = {
+  konfirmasi: "Email konfirmasi tidak cocok. Akun tidak jadi dihapus.",
+  "hapus-diri-sendiri": "Akun sendiri tidak bisa dihapus dari halaman ini.",
+  "hapus-master":
+    "Akun master tidak bisa dihapus. Keluarkan dulu emailnya dari MASTER_EMAILS di pengaturan hosting.",
+};
 
 export default async function LaporanFismed({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const user = await requireUser();
   pastikanAdmin(user);
 
   const { id } = await params;
+  const { error } = await searchParams;
+  const pesanGagal = PESAN_HAPUS[error ?? ""];
 
   const fismed = await prisma.user.findUnique({
     where: { id },
@@ -25,7 +38,7 @@ export default async function LaporanFismed({
   });
   if (!fismed) notFound();
 
-  const [laporan, jumlahInstansi, jumlahAlat] = await Promise.all([
+  const [laporan, jumlahInstansi, jumlahAlat, jumlahAlatUkur] = await Promise.all([
     prisma.laporan.findMany({
       where: { userId: id },
       orderBy: { tanggalUji: "desc" },
@@ -33,7 +46,12 @@ export default async function LaporanFismed({
     }),
     prisma.instansi.count({ where: { createdById: id } }),
     prisma.alatRadiologi.count({ where: { createdById: id } }),
+    prisma.alatUkur.count({ where: { createdById: id } }),
   ]);
+
+  const diriSendiri = fismed.id === user.id;
+  const targetMaster = fismed.peran === "master" || emailMaster(fismed.email);
+  const bolehHapus = user.master && !diriSendiri && !targetMaster;
 
   return (
     <div>
@@ -44,7 +62,8 @@ export default async function LaporanFismed({
             {fismed.gelar ? `, ${fismed.gelar}` : ""}
           </h2>
           <p className="text-sm text-[var(--muted)]">
-            {fismed.email} · {fismed.peran === "admin" ? "Admin" : "Fismed"} · bergabung{" "}
+            {fismed.email} · {targetMaster ? "Master" : labelPeran(fismed.peran)} ·
+            bergabung{" "}
             {tanggalPanjang(fismed.createdAt)}
           </p>
         </div>
@@ -119,6 +138,58 @@ export default async function LaporanFismed({
         Membuka laporan Fismed lain tidak memindahkan kepemilikannya — nama Fismed
         pembuatnya tetap yang tercetak di kolom tanda tangan.
       </p>
+
+      {/* ---------- Hapus akun ---------- */}
+      {bolehHapus && (
+        <div className="kartu mt-8 border-red-300 p-5">
+          <h3 className="text-sm font-semibold text-red-800">Hapus akun</h3>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Menghapus akun <strong>{fismed.email}</strong> beserta{" "}
+            <strong>{fismed._count.laporan} laporan</strong>, {jumlahInstansi} instansi,{" "}
+            {jumlahAlat} alat radiologi, dan {jumlahAlatUkur} alat ukur miliknya.
+          </p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Data yang masih dipakai laporan Fismed lain tidak ikut dihapus, melainkan
+            dialihkan kepemilikannya kepada Anda. <strong>Tindakan ini permanen</strong>{" "}
+            dan tidak bisa dibatalkan.
+          </p>
+
+          {pesanGagal && (
+            <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {pesanGagal}
+            </p>
+          )}
+
+          <form action={hapusAkun} className="mt-4 flex flex-wrap items-end gap-3">
+            <input type="hidden" name="id" value={fismed.id} />
+            <label className="min-w-64 flex-1">
+              <span className="mb-1 block text-sm font-medium">
+                Ketik <span className="font-mono">{fismed.email}</span> untuk konfirmasi
+              </span>
+              <input
+                name="konfirmasi"
+                required
+                autoComplete="off"
+                placeholder={fismed.email}
+                className="input-dasar"
+              />
+            </label>
+            <button type="submit" className="tombol tombol-bahaya">
+              Hapus akun ini
+            </button>
+          </form>
+        </div>
+      )}
+
+      {!bolehHapus && (
+        <p className="mt-8 text-xs text-[var(--muted)]">
+          {diriSendiri
+            ? "Ini akun Anda sendiri, jadi tidak bisa dihapus dari sini."
+            : targetMaster
+              ? "Akun master tidak bisa dihapus dari sini — perannya berasal dari MASTER_EMAILS di pengaturan hosting."
+              : "Penghapusan akun hanya tersedia untuk master."}
+        </p>
+      )}
     </div>
   );
 }

@@ -235,10 +235,11 @@ Refresh halaman repo. Kalau file-file proyek sudah muncul, berhasil.
    | `DATABASE_URL` | connection string Postgres dari Langkah 2 |
    | `AUTH_SECRET` | hasil acak dari Langkah 3 |
    | `AUTH_TRUST_HOST` | `true` |
-   | `ADMIN_EMAILS` | email akun admin pertama Anda (boleh lebih dari satu, dipisah koma) |
+   | `MASTER_EMAILS` | email akun master Anda (boleh lebih dari satu, dipisah koma) |
 
-   `ADMIN_EMAILS` hanya menjamin adanya admin pertama. Setelah itu peran akun
-   diatur dari dalam aplikasi lewat **Profil → Fismed**.
+   Master adalah peran tertinggi: mengatur peran akun lain (Fismed ↔ Admin) dan
+   menghapus akun. Sengaja hanya bisa diatur dari sini, tidak dari dalam
+   aplikasi, supaya tidak bisa diturunkan atau dihapus lewat antarmuka.
 
    Kalau tadi memakai Jalur A dan database sudah di-*connect* ke project ini,
    `DATABASE_URL` mungkin sudah terisi sendiri — cukup pastikan namanya persis

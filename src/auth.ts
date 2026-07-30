@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
+import { emailMaster } from "@/lib/peran";
 import { prisma } from "@/lib/prisma";
 
 declare module "next-auth" {
@@ -11,31 +12,14 @@ declare module "next-auth" {
       gelar: string | null;
       nip: string | null;
       email: string;
-      /** akun master: bisa melihat & mengubah data milik semua Fismed */
+      /** "fismed" | "admin" | "master" */
+      peran: string;
+      /** admin ATAU master — boleh membuka data milik Fismed lain */
       admin: boolean;
+      /** master — boleh mengatur peran dan menghapus akun */
+      master: boolean;
     };
   }
-}
-
-/**
- * Daftar email yang dijamin berperan admin, dari environment variable
- * ADMIN_EMAILS (dipisah koma).
- *
- * Peran sesungguhnya disimpan di kolom `User.peran` dan diubah lewat halaman
- * Profil → Fismed. ADMIN_EMAILS hanya jaring pengaman: email di daftar ini
- * otomatis dinaikkan jadi admin saat login, sehingga selalu ada admin pertama
- * dan akses tidak bisa terkunci total.
- */
-function daftarAdmin(): string[] {
-  return (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-export function emailAdalahAdmin(email: string | null | undefined): boolean {
-  if (!email) return false;
-  return daftarAdmin().includes(email.trim().toLowerCase());
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -83,14 +67,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { id: token.uid as string },
         });
 
-        // Jaring pengaman: email di ADMIN_EMAILS dipastikan berperan admin.
-        // Gunanya agar selalu ada admin pertama, dan agar akses tidak terkunci
-        // seandainya seluruh admin tanpa sengaja diturunkan perannya.
-        if (db && db.peran !== "admin" && emailAdalahAdmin(db.email)) {
-          db = await prisma.user.update({
-            where: { id: db.id },
-            data: { peran: "admin" },
-          });
+        // Peran master disinkronkan dari MASTER_EMAILS setiap login: yang
+        // terdaftar dinaikkan, yang sudah dikeluarkan dari daftar diturunkan
+        // jadi admin biasa.
+        if (db) {
+          const seharusnyaMaster = emailMaster(db.email);
+          if (seharusnyaMaster && db.peran !== "master") {
+            db = await prisma.user.update({
+              where: { id: db.id },
+              data: { peran: "master" },
+            });
+          } else if (!seharusnyaMaster && db.peran === "master") {
+            db = await prisma.user.update({
+              where: { id: db.id },
+              data: { peran: "admin" },
+            });
+          }
         }
 
         // Akun sudah tidak ada di database — batalkan sesinya, jangan biarkan
@@ -113,7 +105,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         gelar: (token.gelar as string | null) ?? null,
         nip: (token.nip as string | null) ?? null,
         email: (token.email as string) ?? "",
-        admin: token.peran === "admin",
+        peran: (token.peran as string) ?? "fismed",
+        admin: token.peran === "admin" || token.peran === "master",
+        master: token.peran === "master",
       };
       return session;
     },

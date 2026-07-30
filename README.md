@@ -220,20 +220,42 @@ alat ukur, dan laporan. Akun baru mulai dari keadaan kosong. Ini berlaku juga un
 dashboard dan daftar riwayat tetap berisi pekerjaan sendiri, supaya ruang kerjanya tidak
 tercampur.
 
-Akses lintas Fismed ada di satu tempat saja: **Profil → Fismed** (hanya muncul untuk
-admin). Di sana tersedia daftar seluruh akun, tombol naik/turun peran, dan halaman per
-Fismed yang menampilkan laporan apa saja yang sudah dia kalibrasi beserta tautan untuk
-membuka dan mencetaknya.
+Akses lintas Fismed ada di satu tempat saja: **Profil → Fismed** (muncul untuk admin dan
+master). Di sana tersedia daftar seluruh akun dan halaman per Fismed yang menampilkan
+laporan apa saja yang sudah dia kalibrasi beserta tautan untuk membuka dan mencetaknya.
+Tombol atur peran dan hapus akun hanya muncul untuk master.
 
-### Peran
+### Tiga peran
 
-Disimpan di kolom `User.peran` (`"fismed"` atau `"admin"`) dan diubah lewat UI.
-`ADMIN_EMAILS` (dipisah koma) hanya **jaring pengaman**: email di daftar itu otomatis
-dinaikkan jadi admin saat login, sehingga selalu ada admin pertama dan akses tidak bisa
-terkunci total kalau semua admin tidak sengaja diturunkan.
+| Peran | Data sendiri | Buka laporan seluruh Fismed | Atur peran & hapus akun |
+|---|---|---|---|
+| **Fismed** | ✓ | – | – |
+| **Admin** | ✓ | ✓ | – |
+| **Master** | ✓ | ✓ | ✓ |
 
-Seorang admin tidak bisa mengubah perannya sendiri dari halaman itu — mencegah kondisi
-tanpa admin tersisa.
+Peran disimpan di kolom `User.peran`. Bedanya pada cara mengubahnya:
+
+- **Fismed ↔ Admin** diatur master lewat Profil → Fismed.
+- **Master** tidak bisa diberikan atau dicabut dari dalam aplikasi. Sumbernya
+  environment variable `MASTER_EMAILS` (dipisah koma), disinkronkan setiap login: email
+  yang terdaftar dinaikkan jadi master, yang sudah dikeluarkan dari daftar diturunkan
+  jadi admin. Tujuannya supaya pemilik aplikasi tidak bisa diturunkan atau dihapus oleh
+  siapa pun lewat antarmuka.
+
+`ADMIN_EMAILS` masih dibaca sebagai nama lama bila `MASTER_EMAILS` belum diset, supaya
+deployment yang belum diperbarui tidak kehilangan akses masternya.
+
+Master juga tidak bisa mengubah peran atau menghapus akunnya sendiri.
+
+### Hapus akun
+
+Tersedia di Profil → Fismed → pilih akun, khusus master. Master harus mengetik ulang
+email akun yang dihapus sebagai konfirmasi.
+
+Laporan milik akun tersebut ikut terhapus. Data master (instansi, alat radiologi, alat
+ukur) juga terhapus **kecuali** yang masih dipakai laporan Fismed lain — yang seperti itu
+dialihkan kepemilikannya ke master yang menghapus, supaya laporan Fismed lain tidak ikut
+rusak.
 
 ### Penegakan aturan
 
