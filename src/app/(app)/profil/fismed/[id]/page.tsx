@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { KosongPesan } from "@/components/field";
+import { KosongPesan, TabelGulir } from "@/components/field";
 import { pastikanAdmin } from "@/lib/akses";
 import { tanggalPanjang } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -70,52 +70,54 @@ export default async function LaporanFismed({
         {laporan.length === 0 ? (
           <KosongPesan>Fismed ini belum membuat laporan.</KosongPesan>
         ) : (
-          <table className="tabel-data">
-            <thead>
-              <tr>
-                <th>Nomor Laporan</th>
-                <th>Instansi</th>
-                <th>Jenis Alat</th>
-                <th>Tanggal Uji</th>
-                <th>Status</th>
-                <th className="w-40"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {laporan.map((l) => (
-                <tr key={l.id}>
-                  <td className="font-medium">{l.nomorLaporan || "(tanpa nomor)"}</td>
-                  <td>{l.instansi.namaInstansi}</td>
-                  <td>{namaJenisAlat(l.jenisAlat)}</td>
-                  <td>{tanggalPanjang(l.tanggalUji)}</td>
-                  <td>
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs ${
-                        l.status === "selesai"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {l.status === "selesai" ? "Selesai" : "Draf"}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/laporan/${l.id}`} className="tombol tombol-sekunder">
-                        Buka
-                      </Link>
-                      <Link
-                        href={`/laporan/${l.id}/cetak`}
-                        className="tombol tombol-sekunder"
-                      >
-                        PDF
-                      </Link>
-                    </div>
-                  </td>
+          <TabelGulir>
+            <table className="tabel-data">
+              <thead>
+                <tr>
+                  <th>Nomor Laporan</th>
+                  <th>Instansi</th>
+                  <th>Jenis Alat</th>
+                  <th>Tanggal Uji</th>
+                  <th>Status</th>
+                  <th className="w-40"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {laporan.map((l) => (
+                  <tr key={l.id}>
+                    <td className="font-medium">{l.nomorLaporan || "(tanpa nomor)"}</td>
+                    <td>{l.instansi.namaInstansi}</td>
+                    <td>{namaJenisAlat(l.jenisAlat)}</td>
+                    <td>{tanggalPanjang(l.tanggalUji)}</td>
+                    <td>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          l.status === "selesai"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {l.status === "selesai" ? "Selesai" : "Draf"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/laporan/${l.id}`} className="tombol tombol-sekunder">
+                          Buka
+                        </Link>
+                        <Link
+                          href={`/laporan/${l.id}/cetak`}
+                          className="tombol tombol-sekunder"
+                        >
+                          PDF
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TabelGulir>
         )}
       </div>
 

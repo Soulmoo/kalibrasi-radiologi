@@ -80,6 +80,28 @@ the browser print dialog (destination "Save as PDF", A4, browser header/footer o
 was a deliberate choice to avoid needing Puppeteer/Chromium on serverless Vercel and to
 guarantee the PDF always matches the on-screen layout exactly.
 
+### Layout conventions
+
+Every `<table className="tabel-data">` must sit inside `<TabelGulir>` (from
+`src/components/field.tsx`). These tables have many columns and can't fit a phone; the
+wrapper scrolls the table alone. Without it you get one of two bugs — an unwrapped table
+drags the whole page into horizontal scroll, and an `overflow-hidden` card clips the right
+columns so they're unreachable. `.tabel-data` carries a `min-width` so scrolled columns
+stay readable rather than collapsing.
+
+The print sheet (`.lembar-halaman`) is deliberately a fixed 210mm — do not make it
+responsive, since matching the printed PDF exactly is the whole point of the preview.
+`.lembar` scrolls horizontally on screen instead (screen-only; never in `@media print`).
+
+Role badges come from `<LencanaPeran peran={...} />` (`src/components/lencana-peran.tsx`).
+Never derive a badge from `user.admin` — that flag is true for admin *and* master.
+
+Navigation splits at `md`: `NavUtama` renders the horizontal tab strip on desktop only,
+`MenuMobile` renders a hamburger + left drawer below it (both in `src/app/(app)/nav.tsx`).
+Keep **Keluar out of the mobile header** — it previously sat in the cramped top-right
+directly above the tab strip, and users logged themselves out by mistapping it while
+reaching for a tab. It now lives at the bottom of the drawer, separated by a divider.
+
 ### Data model (`prisma/schema.prisma`)
 
 `User` → `Instansi` (client/institution, shared across Fismed) → `AlatRadiologi`

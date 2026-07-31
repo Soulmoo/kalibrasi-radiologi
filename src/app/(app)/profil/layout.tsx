@@ -1,3 +1,4 @@
+import { LencanaPeran } from "@/components/lencana-peran";
 import { requireUser } from "@/lib/session";
 import { TabProfil } from "./tab";
 
@@ -13,12 +14,8 @@ export default async function LayoutProfil({
       <div className="mb-5">
         <h1 className="text-lg font-semibold">
           {user.nama}
-          {user.gelar ? `, ${user.gelar}` : ""}
-          {user.admin && (
-            <span className="ml-2 rounded bg-[var(--brand-soft)] px-2 py-0.5 align-middle text-xs font-medium text-[var(--brand)]">
-              Admin
-            </span>
-          )}
+          {user.gelar ? `, ${user.gelar}` : ""}{" "}
+          <LencanaPeran peran={user.peran} />
         </h1>
         <p className="mt-0.5 text-sm text-[var(--muted)]">{user.email}</p>
       </div>

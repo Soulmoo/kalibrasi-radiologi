@@ -97,6 +97,10 @@ body {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+  /* Di layar sempit tabel digulir mendatar (lihat TabelGulir di
+     src/components/field.tsx) — batas ini menjaga kolomnya tetap terbaca
+     alih-alih gepeng jadi satu-dua huruf per baris. */
+  min-width: 44rem;
 }
 .tabel-data th {
   text-align: left;
@@ -125,6 +129,17 @@ body {
 .lembar {
   color: #000;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Lembar A4 lebarnya 210mm (~794px) — mustahil muat di layar HP. Lebarnya
+   TIDAK dikecilkan, karena justru kesamaan persis dengan hasil cetak yang
+   jadi guna halaman pratinjau ini. Yang dilakukan: wadahnya digulir mendatar
+   supaya lembarnya bisa digeser, bukan memaksa seluruh halaman melar.
+   Hanya untuk layar — saat dicetak wadahnya tidak boleh menggulir. */
+@media screen {
+  .lembar {
+    overflow-x: auto;
+  }
 }
 
 .lembar-halaman {

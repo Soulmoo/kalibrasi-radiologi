@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { hapusAlat } from "@/app/actions/master";
-import { JudulHalaman, KosongPesan } from "@/components/field";
+import { JudulHalaman, KosongPesan, TabelGulir } from "@/components/field";
 import { filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
@@ -64,53 +64,55 @@ export default async function HalamanAlat({
         {daftar.length === 0 ? (
           <KosongPesan>Belum ada alat radiologi terdaftar.</KosongPesan>
         ) : (
-          <table className="tabel-data">
-            <thead>
-              <tr>
-                <th>Alat</th>
-                <th>Jenis</th>
-                <th>Instansi</th>
-                <th>Lokasi Unit</th>
-                <th>No. Seri</th>
-                <th className="text-center">Laporan</th>
-                <th className="w-40"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {daftar.map((a) => (
-                <tr key={a.id}>
-                  <td>
-                    <span className="block font-medium">
-                      {a.namaAlat || `${a.merk ?? ""} ${a.model ?? ""}`.trim() || "(tanpa nama)"}
-                    </span>
-                    {a.merk && (
-                      <span className="text-xs text-[var(--muted)]">
-                        {a.merk} {a.model}
-                      </span>
-                    )}
-                  </td>
-                  <td>{namaJenisAlat(a.jenisAlat)}</td>
-                  <td>{a.instansi.namaInstansi}</td>
-                  <td>{a.lokasiUnit ?? "-"}</td>
-                  <td>{a.noSeri ?? "-"}</td>
-                  <td className="text-center">{a._count.laporan}</td>
-                  <td>
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/alat/${a.id}`} className="tombol tombol-sekunder">
-                        Ubah
-                      </Link>
-                      <form action={hapusAlat}>
-                        <input type="hidden" name="id" value={a.id} />
-                        <button type="submit" className="tombol tombol-bahaya">
-                          Hapus
-                        </button>
-                      </form>
-                    </div>
-                  </td>
+          <TabelGulir>
+            <table className="tabel-data">
+              <thead>
+                <tr>
+                  <th>Alat</th>
+                  <th>Jenis</th>
+                  <th>Instansi</th>
+                  <th>Lokasi Unit</th>
+                  <th>No. Seri</th>
+                  <th className="text-center">Laporan</th>
+                  <th className="w-40"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {daftar.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <span className="block font-medium">
+                        {a.namaAlat || `${a.merk ?? ""} ${a.model ?? ""}`.trim() || "(tanpa nama)"}
+                      </span>
+                      {a.merk && (
+                        <span className="text-xs text-[var(--muted)]">
+                          {a.merk} {a.model}
+                        </span>
+                      )}
+                    </td>
+                    <td>{namaJenisAlat(a.jenisAlat)}</td>
+                    <td>{a.instansi.namaInstansi}</td>
+                    <td>{a.lokasiUnit ?? "-"}</td>
+                    <td>{a.noSeri ?? "-"}</td>
+                    <td className="text-center">{a._count.laporan}</td>
+                    <td>
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/alat/${a.id}`} className="tombol tombol-sekunder">
+                          Ubah
+                        </Link>
+                        <form action={hapusAlat}>
+                          <input type="hidden" name="id" value={a.id} />
+                          <button type="submit" className="tombol tombol-bahaya">
+                            Hapus
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TabelGulir>
         )}
       </div>
     </div>

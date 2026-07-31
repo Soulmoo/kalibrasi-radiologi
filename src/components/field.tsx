@@ -74,3 +74,20 @@ export function KosongPesan({ children }: { children: ReactNode }) {
     <p className="px-4 py-10 text-center text-sm text-[var(--muted)]">{children}</p>
   );
 }
+
+/**
+ * Pembungkus tabel daftar supaya bisa digulir mendatar di layar sempit.
+ *
+ * Tabel-tabel di aplikasi ini berkolom banyak dan tidak mungkin muat di layar
+ * HP. Dua perlakuan sebelumnya sama-sama keliru: tanpa pembungkus, tabelnya
+ * melebihi lebar layar sehingga SELURUH halaman ikut tergeser mendatar; dengan
+ * `overflow-hidden` di kartunya, kolom-kolom kanan terpotong dan tidak bisa
+ * dijangkau sama sekali.
+ *
+ * Menggulirkan tabelnya sendiri menyelesaikan keduanya: halaman tetap diam,
+ * dan seluruh kolom tetap terjangkau dengan geser jari. Lebar minimum di
+ * `.tabel-data` (globals.css) menjaga kolom tidak gepeng jadi tak terbaca.
+ */
+export function TabelGulir({ children }: { children: ReactNode }) {
+  return <div className="overflow-x-auto">{children}</div>;
+}

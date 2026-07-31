@@ -1,3 +1,4 @@
+import { TabelGulir } from "@/components/field";
 import Link from "next/link";
 import { filterLaporan, filterMilik } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
@@ -82,37 +83,39 @@ export default async function Dashboard() {
             .
           </p>
         ) : (
-          <table className="tabel-data">
-            <thead>
-              <tr>
-                <th>Nomor / Instansi</th>
-                <th>Jenis Alat</th>
-                <th>Tanggal Uji</th>
-                <th className="w-24"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {terbaru.map((l) => (
-                <tr key={l.id}>
-                  <td>
-                    <span className="block font-medium">
-                      {l.nomorLaporan || "(tanpa nomor)"}
-                    </span>
-                    <span className="text-xs text-[var(--muted)]">
-                      {l.instansi.namaInstansi}
-                    </span>
-                  </td>
-                  <td>{namaJenisAlat(l.jenisAlat)}</td>
-                  <td>{tanggalPanjang(l.tanggalUji)}</td>
-                  <td className="text-right">
-                    <Link href={`/laporan/${l.id}`} className="text-[var(--brand)] hover:underline">
-                      Buka
-                    </Link>
-                  </td>
+          <TabelGulir>
+            <table className="tabel-data">
+              <thead>
+                <tr>
+                  <th>Nomor / Instansi</th>
+                  <th>Jenis Alat</th>
+                  <th>Tanggal Uji</th>
+                  <th className="w-24"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {terbaru.map((l) => (
+                  <tr key={l.id}>
+                    <td>
+                      <span className="block font-medium">
+                        {l.nomorLaporan || "(tanpa nomor)"}
+                      </span>
+                      <span className="text-xs text-[var(--muted)]">
+                        {l.instansi.namaInstansi}
+                      </span>
+                    </td>
+                    <td>{namaJenisAlat(l.jenisAlat)}</td>
+                    <td>{tanggalPanjang(l.tanggalUji)}</td>
+                    <td className="text-right">
+                      <Link href={`/laporan/${l.id}`} className="text-[var(--brand)] hover:underline">
+                        Buka
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TabelGulir>
         )}
       </div>
     </div>

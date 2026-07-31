@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useMemo, useState } from "react";
 import { simpanLaporan, type AksiState } from "@/app/actions/laporan";
-import { Field, PesanError } from "@/components/field";
+import { Field, PesanError, TabelGulir } from "@/components/field";
 import { draftKesimpulan, hitungBlok, rekapLaporan } from "@/lib/evaluasi";
 import { getTemplate } from "@/lib/templates";
 import type {
@@ -335,7 +335,7 @@ function TabelBlok({
         )}
       </div>
 
-      <div className="overflow-x-auto">
+      <TabelGulir>
         <table className="tabel-data">
           <thead>
             <tr>
@@ -396,7 +396,7 @@ function TabelBlok({
             ))}
           </tbody>
         </table>
-      </div>
+      </TabelGulir>
 
       {blok.modeBaris === "dinamis" && (
         <div className="border-t border-[var(--border)] px-4 py-2">
@@ -412,18 +412,20 @@ function TabelBlok({
 
       {terhitung.ringkasan.length > 0 && (
         <div className="border-t border-[var(--border)] bg-[#f7f9fb] px-4 py-3">
-          <table className="tabel-data">
-            <tbody>
-              {terhitung.ringkasan.map((r) => (
-                <tr key={r.label}>
-                  <td className="font-medium">{r.label}</td>
-                  <td className="tabular-nums">{r.nilai}</td>
-                  <td className="text-xs">{r.toleransi ?? ""}</td>
-                  <td className="w-32">{r.verdict && <LabelHasil verdict={r.verdict} />}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TabelGulir>
+            <table className="tabel-data">
+              <tbody>
+                {terhitung.ringkasan.map((r) => (
+                  <tr key={r.label}>
+                    <td className="font-medium">{r.label}</td>
+                    <td className="tabular-nums">{r.nilai}</td>
+                    <td className="text-xs">{r.toleransi ?? ""}</td>
+                    <td className="w-32">{r.verdict && <LabelHasil verdict={r.verdict} />}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TabelGulir>
         </div>
       )}
     </div>

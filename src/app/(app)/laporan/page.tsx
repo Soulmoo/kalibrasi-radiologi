@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { JudulHalaman, KosongPesan } from "@/components/field";
+import { JudulHalaman, KosongPesan, TabelGulir } from "@/components/field";
 import { filterLaporan } from "@/lib/akses";
 import { tanggalPanjang } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -87,58 +87,60 @@ export default async function HalamanLaporan({
         {daftar.length === 0 ? (
           <KosongPesan>Tidak ada laporan yang cocok.</KosongPesan>
         ) : (
-          <table className="tabel-data">
-            <thead>
-              <tr>
-                <th>Nomor Laporan</th>
-                <th>Instansi</th>
-                <th>Jenis Alat</th>
-                <th>Lokasi Unit</th>
-                <th>Tanggal Uji</th>
-                <th>Status</th>
-                <th className="w-40"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {daftar.map((l) => (
-                <tr key={l.id}>
-                  <td className="font-medium">{l.nomorLaporan || "(tanpa nomor)"}</td>
-                  <td>
-                    <span className="block">{l.instansi.namaInstansi}</span>
-                    {l.instansi.namaFasilitas && (
-                      <span className="text-xs text-[var(--muted)]">
-                        {l.instansi.namaFasilitas}
-                      </span>
-                    )}
-                  </td>
-                  <td>{namaJenisAlat(l.jenisAlat)}</td>
-                  <td>{l.lokasiUji ?? l.alatRadiologi.lokasiUnit ?? "-"}</td>
-                  <td>{tanggalPanjang(l.tanggalUji)}</td>
-                  <td>
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs ${
-                        l.status === "selesai"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      {l.status === "selesai" ? "Selesai" : "Draf"}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="flex justify-end gap-2">
-                      <Link href={`/laporan/${l.id}`} className="tombol tombol-sekunder">
-                        Buka
-                      </Link>
-                      <Link href={`/laporan/${l.id}/cetak`} className="tombol tombol-sekunder">
-                        PDF
-                      </Link>
-                    </div>
-                  </td>
+          <TabelGulir>
+            <table className="tabel-data">
+              <thead>
+                <tr>
+                  <th>Nomor Laporan</th>
+                  <th>Instansi</th>
+                  <th>Jenis Alat</th>
+                  <th>Lokasi Unit</th>
+                  <th>Tanggal Uji</th>
+                  <th>Status</th>
+                  <th className="w-40"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {daftar.map((l) => (
+                  <tr key={l.id}>
+                    <td className="font-medium">{l.nomorLaporan || "(tanpa nomor)"}</td>
+                    <td>
+                      <span className="block">{l.instansi.namaInstansi}</span>
+                      {l.instansi.namaFasilitas && (
+                        <span className="text-xs text-[var(--muted)]">
+                          {l.instansi.namaFasilitas}
+                        </span>
+                      )}
+                    </td>
+                    <td>{namaJenisAlat(l.jenisAlat)}</td>
+                    <td>{l.lokasiUji ?? l.alatRadiologi.lokasiUnit ?? "-"}</td>
+                    <td>{tanggalPanjang(l.tanggalUji)}</td>
+                    <td>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          l.status === "selesai"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {l.status === "selesai" ? "Selesai" : "Draf"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/laporan/${l.id}`} className="tombol tombol-sekunder">
+                          Buka
+                        </Link>
+                        <Link href={`/laporan/${l.id}/cetak`} className="tombol tombol-sekunder">
+                          PDF
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TabelGulir>
         )}
       </div>
     </div>

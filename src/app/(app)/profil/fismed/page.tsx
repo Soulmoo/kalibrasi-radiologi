@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ubahPeran } from "@/app/actions/pengguna";
-import { KosongPesan } from "@/components/field";
+import { KosongPesan, TabelGulir } from "@/components/field";
+import { LencanaPeran } from "@/components/lencana-peran";
 import { pastikanAdmin } from "@/lib/akses";
 import { tanggalPanjang } from "@/lib/format";
-import { emailMaster, labelPeran } from "@/lib/peran";
+import { emailMaster } from "@/lib/peran";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { TombolHapusAkun } from "./tombol-hapus";
@@ -40,12 +41,6 @@ function petaJumlah(rows: { createdById: string | null; _count: { _all: number }
   for (const r of rows) if (r.createdById) peta.set(r.createdById, r._count._all);
   return peta;
 }
-
-const WARNA_PERAN: Record<string, string> = {
-  master: "bg-[var(--brand)] text-white",
-  admin: "bg-[var(--brand-soft)] text-[var(--brand)]",
-  fismed: "bg-gray-100 text-gray-700",
-};
 
 export default async function HalamanFismed({
   searchParams,
@@ -95,91 +90,85 @@ export default async function HalamanFismed({
         {daftar.length === 0 ? (
           <KosongPesan>Belum ada akun terdaftar.</KosongPesan>
         ) : (
-          <table className="tabel-data">
-            <thead>
-              <tr>
-                <th>Nama</th>
-                <th>Email</th>
-                <th className="text-center">Laporan</th>
-                <th>Bergabung</th>
-                <th>Peran</th>
-                {user.master && <th className="w-52"></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {daftar.map((u) => {
-                const diriSendiri = u.id === user.id;
-                // Email yang terdaftar di MASTER_EMAILS dianggap master walau
-                // kolom perannya belum tersinkron — sinkronisasi terjadi saat
-                // akun itu login berikutnya.
-                const targetMaster = u.peran === "master" || emailMaster(u.email);
-                return (
-                  <tr key={u.id}>
-                    <td>
-                      <Link
-                        href={`/profil/fismed/${u.id}`}
-                        className="font-medium text-[var(--brand)] hover:underline"
-                      >
-                        {u.nama}
-                        {u.gelar ? `, ${u.gelar}` : ""}
-                      </Link>
-                      {diriSendiri && (
-                        <span className="ml-2 text-xs text-[var(--muted)]">(Anda)</span>
-                      )}
-                    </td>
-                    <td>{u.email}</td>
-                    <td className="text-center">{u._count.laporan}</td>
-                    <td>{tanggalPanjang(u.createdAt)}</td>
-                    <td>
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs ${
-                          targetMaster
-                            ? WARNA_PERAN.master
-                            : (WARNA_PERAN[u.peran] ?? WARNA_PERAN.fismed)
-                        }`}
-                      >
-                        {targetMaster ? "Master" : labelPeran(u.peran)}
-                      </span>
-                    </td>
-                    {user.master && (
+          <TabelGulir>
+            <table className="tabel-data">
+              <thead>
+                <tr>
+                  <th>Nama</th>
+                  <th>Email</th>
+                  <th className="text-center">Laporan</th>
+                  <th>Bergabung</th>
+                  <th>Peran</th>
+                  {user.master && <th className="w-52"></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {daftar.map((u) => {
+                  const diriSendiri = u.id === user.id;
+                  // Email yang terdaftar di MASTER_EMAILS dianggap master walau
+                  // kolom perannya belum tersinkron — sinkronisasi terjadi saat
+                  // akun itu login berikutnya.
+                  const targetMaster = u.peran === "master" || emailMaster(u.email);
+                  return (
+                    <tr key={u.id}>
                       <td>
-                        {diriSendiri || targetMaster ? (
-                          <span className="block text-right text-xs text-[var(--muted)]">
-                            {targetMaster ? "terkunci" : "—"}
-                          </span>
-                        ) : (
-                          <div className="flex items-center justify-end gap-2">
-                            <form action={ubahPeran}>
-                              <input type="hidden" name="id" value={u.id} />
-                              <input
-                                type="hidden"
-                                name="peran"
-                                value={u.peran === "admin" ? "fismed" : "admin"}
-                              />
-                              <button type="submit" className="tombol tombol-sekunder">
-                                {u.peran === "admin" ? "Turunkan" : "Jadikan Admin"}
-                              </button>
-                            </form>
-                            <TombolHapusAkun
-                              id={u.id}
-                              nama={u.nama + (u.gelar ? `, ${u.gelar}` : "")}
-                              email={u.email}
-                              jumlah={{
-                                laporan: u._count.laporan,
-                                instansi: jumlahInstansi.get(u.id) ?? 0,
-                                alat: jumlahAlat.get(u.id) ?? 0,
-                                alatUkur: jumlahAlatUkur.get(u.id) ?? 0,
-                              }}
-                            />
-                          </div>
+                        <Link
+                          href={`/profil/fismed/${u.id}`}
+                          className="font-medium text-[var(--brand)] hover:underline"
+                        >
+                          {u.nama}
+                          {u.gelar ? `, ${u.gelar}` : ""}
+                        </Link>
+                        {diriSendiri && (
+                          <span className="ml-2 text-xs text-[var(--muted)]">(Anda)</span>
                         )}
                       </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <td>{u.email}</td>
+                      <td className="text-center">{u._count.laporan}</td>
+                      <td>{tanggalPanjang(u.createdAt)}</td>
+                      <td>
+                        <LencanaPeran peran={targetMaster ? "master" : u.peran} />
+                      </td>
+                      {user.master && (
+                        <td>
+                          {diriSendiri || targetMaster ? (
+                            <span className="block text-right text-xs text-[var(--muted)]">
+                              {targetMaster ? "terkunci" : "—"}
+                            </span>
+                          ) : (
+                            <div className="flex items-center justify-end gap-2">
+                              <form action={ubahPeran}>
+                                <input type="hidden" name="id" value={u.id} />
+                                <input
+                                  type="hidden"
+                                  name="peran"
+                                  value={u.peran === "admin" ? "fismed" : "admin"}
+                                />
+                                <button type="submit" className="tombol tombol-sekunder">
+                                  {u.peran === "admin" ? "Turunkan" : "Jadikan Admin"}
+                                </button>
+                              </form>
+                              <TombolHapusAkun
+                                id={u.id}
+                                nama={u.nama + (u.gelar ? `, ${u.gelar}` : "")}
+                                email={u.email}
+                                jumlah={{
+                                  laporan: u._count.laporan,
+                                  instansi: jumlahInstansi.get(u.id) ?? 0,
+                                  alat: jumlahAlat.get(u.id) ?? 0,
+                                  alatUkur: jumlahAlatUkur.get(u.id) ?? 0,
+                                }}
+                              />
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TabelGulir>
         )}
       </div>
 
