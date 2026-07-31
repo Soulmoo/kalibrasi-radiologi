@@ -2,14 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hapusLaporan } from "@/app/actions/laporan";
 import { JudulHalaman } from "@/components/field";
-import { filterMilikPengguna, pastikanBoleh } from "@/lib/akses";
-import { tanggalInput } from "@/lib/format";
+import { bolehUbah, filterMilikPengguna, pastikanBolehLihat } from "@/lib/akses";
+import { namaLengkap, tanggalInput, tanggalPanjang } from "@/lib/format";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
 import { normalisasiHasil } from "@/lib/templates/types";
-import { tanggalPanjang } from "@/lib/format";
+import { LaporanBacaSaja } from "./baca";
 import { FormLaporan } from "./form";
 
 export default async function HalamanLaporan({
@@ -25,20 +25,19 @@ export default async function HalamanLaporan({
     include: {
       instansi: true,
       alatRadiologi: true,
-      alatUkur: { orderBy: { urutan: "asc" } },
+      user: true,
+      alatUkur: { include: { alatUkur: true }, orderBy: { urutan: "asc" } },
     },
   });
 
   if (!laporan) notFound();
-  pastikanBoleh(user, laporan.userId);
+  pastikanBolehLihat(user, laporan.userId);
 
-  // Registry alat ukur mengikuti pemilik laporan, bukan pengguna yang membuka —
-  // supaya saat admin menyunting laporan Fismed lain, alat ukur yang sudah
-  // tercatat tidak hilang dan pilihannya tetap masuk akal.
-  const alatUkur = await prisma.alatUkur.findMany({
-    where: filterMilikPengguna(laporan.userId),
-    orderBy: { nama: "asc" },
-  });
+  // Admin & master boleh membuka laporan Fismed lain, tetapi tidak menyuntingnya:
+  // isi laporan adalah hasil pengukuran yang sangat personal bagi Fismed yang
+  // mengerjakannya. Untuk mereka form sunting tidak dirender sama sekali —
+  // lihat juga penolakan di server action `simpanLaporan`.
+  const bisaUbah = bolehUbah(user, laporan.userId);
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) {
@@ -53,28 +52,79 @@ export default async function HalamanLaporan({
   }
 
   const sekarang = new Date();
+  const namaAlat =
+    laporan.alatRadiologi.namaAlat ?? laporan.alatRadiologi.model ?? "-";
+  const hasil = normalisasiHasil(template, parseJson(laporan.hasilUji, {}));
 
-  return (
-    <div>
-      <JudulHalaman
-        judul={`Laporan Kalibrasi — ${template.nama}`}
-        keterangan={`${laporan.instansi.namaInstansi} · ${
-          laporan.alatRadiologi.namaAlat ?? laporan.alatRadiologi.model ?? "-"
-        } · Uji ${tanggalPanjang(laporan.tanggalUji)}`}
-        aksi={
-          <div className="flex gap-2">
-            <Link href={`/laporan/${laporan.id}/cetak`} className="tombol tombol-sekunder">
-              Pratinjau &amp; Export PDF
-            </Link>
+  const judul = (
+    <JudulHalaman
+      judul={`Laporan Kalibrasi — ${template.nama}`}
+      keterangan={`${laporan.instansi.namaInstansi} · ${namaAlat} · Uji ${tanggalPanjang(
+        laporan.tanggalUji,
+      )}`}
+      aksi={
+        <div className="flex gap-2">
+          <Link href={`/laporan/${laporan.id}/cetak`} className="tombol tombol-sekunder">
+            Pratinjau &amp; Export PDF
+          </Link>
+          {bisaUbah && (
             <form action={hapusLaporan}>
               <input type="hidden" name="id" value={laporan.id} />
               <button type="submit" className="tombol tombol-bahaya">
                 Hapus
               </button>
             </form>
-          </div>
-        }
-      />
+          )}
+        </div>
+      }
+    />
+  );
+
+  if (!bisaUbah) {
+    return (
+      <div>
+        {judul}
+        <LaporanBacaSaja
+          template={template}
+          hasil={hasil}
+          pemilik={namaLengkap(laporan.user)}
+          laporan={{
+            nomorLaporan: laporan.nomorLaporan,
+            nomorOrder: laporan.nomorOrder,
+            tanggalUji: laporan.tanggalUji,
+            tanggalTerbit: laporan.tanggalTerbit,
+            lokasiUji: laporan.lokasiUji,
+            metodeKerja: laporan.metodeKerja,
+            kesimpulan: laporan.kesimpulan,
+            catatan: laporan.catatan,
+            rekomendasi: laporan.rekomendasi,
+            status: laporan.status,
+            namaInstansi: laporan.instansi.namaInstansi,
+            namaAlat,
+            alatUkur: laporan.alatUkur.map(({ alatUkur: a }) => ({
+              id: a.id,
+              nama: a.nama,
+              merek: a.merek,
+              modelTipe: a.modelTipe,
+              noSeri: a.noSeri,
+              masaKalibrasiTeks: tanggalPanjang(a.masaKalibrasiSampai),
+            })),
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Registry alat ukur mengikuti pemilik laporan, bukan pengguna yang membuka —
+  // supaya alat ukur yang sudah tercatat tidak hilang saat laporan disimpan.
+  const alatUkur = await prisma.alatUkur.findMany({
+    where: filterMilikPengguna(laporan.userId),
+    orderBy: { nama: "asc" },
+  });
+
+  return (
+    <div>
+      {judul}
 
       <FormLaporan
         laporan={{
@@ -90,7 +140,7 @@ export default async function HalamanLaporan({
           catatan: laporan.catatan,
           rekomendasi: laporan.rekomendasi,
           status: laporan.status,
-          hasilUji: normalisasiHasil(template, parseJson(laporan.hasilUji, {})),
+          hasilUji: hasil,
           alatUkurTerpilih: laporan.alatUkur.map((x) => x.alatUkurId),
         }}
         alatUkur={alatUkur.map((a) => ({

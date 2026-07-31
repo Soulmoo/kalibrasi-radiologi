@@ -40,9 +40,10 @@ export async function ubahPeran(fd: FormData) {
 /**
  * Hapus akun beserta seluruh datanya. Khusus master.
  *
- * Tidak bisa dibatalkan, jadi dijaga berlapis: master tidak bisa menghapus
- * dirinya sendiri maupun master lain, dan harus mengetik ulang email akun yang
- * dihapus sebagai konfirmasi.
+ * Konfirmasinya satu dialog di daftar Fismed. Penjagaan yang sebenarnya ada di
+ * sini, bukan di dialog itu: master tidak bisa menghapus dirinya sendiri maupun
+ * master lain, dan aksi ini menolak siapa pun yang bukan master — termasuk bila
+ * dipanggil lewat request langsung tanpa melalui tombol di layar.
  *
  * Soal data: laporan milik akun tersebut ikut terhapus. Data master (instansi,
  * alat radiologi, alat ukur) juga terhapus, KECUALI yang masih dipakai laporan
@@ -54,20 +55,14 @@ export async function hapusAkun(fd: FormData) {
   if (!user.master) redirect("/profil");
 
   const id = String(fd.get("id") ?? "");
-  const konfirmasi = String(fd.get("konfirmasi") ?? "")
-    .trim()
-    .toLowerCase();
 
-  if (id === user.id) redirect(`/profil/fismed/${id}?error=hapus-diri-sendiri`);
+  if (id === user.id) redirect("/profil/fismed?error=hapus-diri-sendiri");
 
   const target = await prisma.user.findUnique({ where: { id } });
   if (!target) redirect("/profil/fismed?error=tidak-ada");
 
   if (target.peran === "master" || emailMaster(target.email)) {
-    redirect(`/profil/fismed/${id}?error=hapus-master`);
-  }
-  if (konfirmasi !== target.email.toLowerCase()) {
-    redirect(`/profil/fismed/${id}?error=konfirmasi`);
+    redirect("/profil/fismed?error=hapus-master");
   }
 
   await prisma.$transaction(async (tx) => {

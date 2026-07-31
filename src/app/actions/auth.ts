@@ -34,7 +34,13 @@ export async function daftar(_prev: FormState, formData: FormData): Promise<Form
   const { nama, gelar, nip, email, password } = hasil.data;
 
   const sudahAda = await prisma.user.findUnique({ where: { email } });
-  if (sudahAda) return { error: "Email ini sudah terdaftar. Silakan masuk." };
+  if (sudahAda) {
+    return {
+      error: sudahAda.passwordHash
+        ? "Email ini sudah terdaftar. Silakan masuk."
+        : "Email ini sudah terdaftar lewat Google. Masuklah dengan tombol Google.",
+    };
+  }
 
   await prisma.user.create({
     data: {
@@ -69,6 +75,19 @@ export async function masuk(_prev: FormState, formData: FormData): Promise<FormS
   }
 
   redirect("/dashboard");
+}
+
+/**
+ * Mulai alur masuk dengan Google.
+ *
+ * `signIn` menyelesaikan dirinya dengan melempar redirect ke Google, jadi
+ * jangan pernah membungkusnya dengan try/catch yang menelan error — redirect-nya
+ * ikut tertelan dan pengguna hanya melihat halaman yang diam saja. Kegagalan di
+ * sisi Google ditangani lewat `pages.error` di src/auth.ts, yang mengembalikan
+ * pengguna ke /masuk dengan parameter ?error=.
+ */
+export async function masukGoogle() {
+  await signIn("google", { redirectTo: "/dashboard" });
 }
 
 export async function keluar() {

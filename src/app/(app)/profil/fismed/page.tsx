@@ -6,12 +6,23 @@ import { tanggalPanjang } from "@/lib/format";
 import { emailMaster, labelPeran } from "@/lib/peran";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { TombolHapusAkun } from "./tombol-hapus";
 
 const PESAN: Record<string, { teks: string; nada: "ok" | "salah" }> = {
   peran: { teks: "Peran akun berhasil diperbarui.", nada: "ok" },
   hapus: { teks: "Akun beserta datanya berhasil dihapus.", nada: "ok" },
   "diri-sendiri": {
     teks: "Peran akun sendiri tidak bisa diubah dari sini.",
+    nada: "salah",
+  },
+  "hapus-diri-sendiri": {
+    teks: "Akun sendiri tidak bisa dihapus dari sini.",
+    nada: "salah",
+  },
+  "hapus-master": {
+    teks:
+      "Akun master tidak bisa dihapus. Keluarkan dulu emailnya dari MASTER_EMAILS " +
+      "di pengaturan hosting.",
     nada: "salah",
   },
   "tidak-ada": { teks: "Akun tidak ditemukan.", nada: "salah" },
@@ -22,6 +33,13 @@ const PESAN: Record<string, { teks: string; nada: "ok" | "salah" }> = {
     nada: "salah",
   },
 };
+
+/** Jumlah data master per pemilik, untuk ditampilkan di dialog konfirmasi hapus. */
+function petaJumlah(rows: { createdById: string | null; _count: { _all: number } }[]) {
+  const peta = new Map<string, number>();
+  for (const r of rows) if (r.createdById) peta.set(r.createdById, r._count._all);
+  return peta;
+}
 
 const WARNA_PERAN: Record<string, string> = {
   master: "bg-[var(--brand)] text-white",
@@ -40,10 +58,19 @@ export default async function HalamanFismed({
   const { ok, error } = await searchParams;
   const pesan = PESAN[ok ?? error ?? ""];
 
-  const daftar = await prisma.user.findMany({
-    orderBy: [{ peran: "asc" }, { nama: "asc" }],
-    include: { _count: { select: { laporan: true } } },
-  });
+  const [daftar, barisInstansi, barisAlat, barisAlatUkur] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: [{ peran: "asc" }, { nama: "asc" }],
+      include: { _count: { select: { laporan: true } } },
+    }),
+    prisma.instansi.groupBy({ by: ["createdById"], _count: { _all: true } }),
+    prisma.alatRadiologi.groupBy({ by: ["createdById"], _count: { _all: true } }),
+    prisma.alatUkur.groupBy({ by: ["createdById"], _count: { _all: true } }),
+  ]);
+
+  const jumlahInstansi = petaJumlah(barisInstansi);
+  const jumlahAlat = petaJumlah(barisAlat);
+  const jumlahAlatUkur = petaJumlah(barisAlatUkur);
 
   return (
     <div>
@@ -76,7 +103,7 @@ export default async function HalamanFismed({
                 <th className="text-center">Laporan</th>
                 <th>Bergabung</th>
                 <th>Peran</th>
-                {user.master && <th className="w-32"></th>}
+                {user.master && <th className="w-52"></th>}
               </tr>
             </thead>
             <tbody>
@@ -121,17 +148,30 @@ export default async function HalamanFismed({
                             {targetMaster ? "terkunci" : "—"}
                           </span>
                         ) : (
-                          <form action={ubahPeran} className="flex justify-end">
-                            <input type="hidden" name="id" value={u.id} />
-                            <input
-                              type="hidden"
-                              name="peran"
-                              value={u.peran === "admin" ? "fismed" : "admin"}
+                          <div className="flex items-center justify-end gap-2">
+                            <form action={ubahPeran}>
+                              <input type="hidden" name="id" value={u.id} />
+                              <input
+                                type="hidden"
+                                name="peran"
+                                value={u.peran === "admin" ? "fismed" : "admin"}
+                              />
+                              <button type="submit" className="tombol tombol-sekunder">
+                                {u.peran === "admin" ? "Turunkan" : "Jadikan Admin"}
+                              </button>
+                            </form>
+                            <TombolHapusAkun
+                              id={u.id}
+                              nama={u.nama + (u.gelar ? `, ${u.gelar}` : "")}
+                              email={u.email}
+                              jumlah={{
+                                laporan: u._count.laporan,
+                                instansi: jumlahInstansi.get(u.id) ?? 0,
+                                alat: jumlahAlat.get(u.id) ?? 0,
+                                alatUkur: jumlahAlatUkur.get(u.id) ?? 0,
+                              }}
                             />
-                            <button type="submit" className="tombol tombol-sekunder">
-                              {u.peran === "admin" ? "Turunkan" : "Jadikan Admin"}
-                            </button>
-                          </form>
+                          </div>
                         )}
                       </td>
                     )}
@@ -146,8 +186,9 @@ export default async function HalamanFismed({
       <div className="mt-3 space-y-1 text-xs text-[var(--muted)]">
         <p>
           <strong>Fismed</strong> hanya melihat data buatannya sendiri.{" "}
-          <strong>Admin</strong> juga bisa membuka laporan seluruh Fismed.{" "}
-          <strong>Master</strong> ditambah wewenang mengatur peran dan menghapus akun.
+          <strong>Admin</strong> juga bisa membuka laporan seluruh Fismed, tetapi
+          baca-saja. <strong>Master</strong> ditambah wewenang mengatur peran dan
+          menghapus akun.
         </p>
         {user.master ? (
           <p>

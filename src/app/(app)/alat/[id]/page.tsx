@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { JudulHalaman } from "@/components/field";
-import { filterMilik, pastikanBoleh } from "@/lib/akses";
+import { filterMilik, pastikanBolehUbah } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { parseJson } from "@/lib/json";
@@ -24,7 +24,7 @@ export default async function UbahAlat({
   ]);
 
   if (!alat) notFound();
-  pastikanBoleh(user, alat.createdById);
+  pastikanBolehUbah(user, alat.createdById);
 
   return (
     <div className="max-w-4xl">

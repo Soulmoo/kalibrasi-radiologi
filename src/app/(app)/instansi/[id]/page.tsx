@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { JudulHalaman } from "@/components/field";
-import { pastikanBoleh } from "@/lib/akses";
+import { pastikanBolehUbah } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { FormInstansi } from "../form";
@@ -14,7 +14,7 @@ export default async function UbahInstansi({
   const { id } = await params;
   const instansi = await prisma.instansi.findUnique({ where: { id } });
   if (!instansi) notFound();
-  pastikanBoleh(user, instansi.createdById);
+  pastikanBolehUbah(user, instansi.createdById);
 
   return (
     <div className="max-w-3xl">

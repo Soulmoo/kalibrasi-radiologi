@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { boleh, filterMilikPengguna } from "@/lib/akses";
+import { bolehUbah, filterMilikPengguna } from "@/lib/akses";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
@@ -33,7 +33,7 @@ export async function buatLaporan(_prev: AksiState, fd: FormData): Promise<AksiS
     where: { id: alatRadiologiId },
   });
   if (!alat) return { error: "Alat radiologi tidak ditemukan" };
-  if (!boleh(user, alat.createdById)) {
+  if (!bolehUbah(user, alat.createdById)) {
     return { error: "Alat radiologi ini bukan milik Anda" };
   }
 
@@ -71,8 +71,10 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
 
   const laporan = await prisma.laporan.findUnique({ where: { id } });
   if (!laporan) return { error: "Laporan tidak ditemukan" };
-  if (!boleh(user, laporan.userId)) {
-    return { error: "Anda tidak berhak mengubah laporan ini" };
+  // Baca-saja untuk siapa pun selain pemiliknya, termasuk admin & master: isi
+  // laporan adalah hasil pengukuran Fismed yang mengerjakannya.
+  if (!bolehUbah(user, laporan.userId)) {
+    return { error: "Laporan ini milik Fismed lain dan hanya bisa dibuka baca-saja." };
   }
 
   // Hasil uji dikirim sebagai satu payload JSON dari form klien.
@@ -138,7 +140,7 @@ export async function hapusLaporan(fd: FormData) {
   const id = String(fd.get("id") ?? "");
 
   const ada = await prisma.laporan.findUnique({ where: { id } });
-  if (!ada || !boleh(user, ada.userId)) redirect("/laporan");
+  if (!ada || !bolehUbah(user, ada.userId)) redirect("/laporan");
 
   await prisma.laporan.delete({ where: { id } });
   revalidatePath("/laporan");

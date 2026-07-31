@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { JudulHalaman } from "@/components/field";
-import { pastikanBoleh } from "@/lib/akses";
+import { pastikanBolehUbah } from "@/lib/akses";
 import { tanggalInput } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
@@ -15,7 +15,7 @@ export default async function UbahAlatUkur({
   const { id } = await params;
   const a = await prisma.alatUkur.findUnique({ where: { id } });
   if (!a) notFound();
-  pastikanBoleh(user, a.createdById);
+  pastikanBolehUbah(user, a.createdById);
 
   return (
     <div className="max-w-3xl">

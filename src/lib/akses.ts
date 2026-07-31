@@ -3,14 +3,16 @@ import { notFound } from "next/navigation";
 /**
  * Aturan kepemilikan data.
  *
- * Dua hal yang sengaja dipisah:
+ * Tiga hal yang sengaja dipisah:
  *
  * 1. **Daftar** (dashboard, riwayat laporan, data master) selalu menampilkan
  *    milik sendiri saja — termasuk untuk admin. Ruang kerja tiap Fismed tetap
  *    bersih dan tidak tercampur data orang lain.
- * 2. **Akses satuan** — admin tetap boleh membuka dan mengubah satu data milik
- *    Fismed lain. Pintu masuknya lewat Profil → Fismed, bukan lewat daftar
- *    miliknya sendiri.
+ * 2. **Membuka satu data** — admin & master boleh membuka data milik Fismed
+ *    lain. Pintu masuknya lewat Profil → Fismed, bukan lewat daftar miliknya
+ *    sendiri.
+ * 3. **Mengubah satu data** — HANYA pemiliknya. Admin dan master pun tidak.
+ *    Akses lintas Fismed bersifat baca-saja.
  *
  * Kolom kepemilikannya: `createdById` untuk data master, `userId` untuk laporan.
  */
@@ -38,22 +40,49 @@ export function filterMilikPengguna(penggunaId: string) {
   return { createdById: penggunaId };
 }
 
-/**
- * Apakah pengguna boleh membuka/mengubah satu data dengan pemilik tertentu.
- * Admin boleh atas data siapa pun.
- */
-export function boleh(user: Pengguna, pemilikId: string | null | undefined) {
-  return user.admin || (pemilikId != null && pemilikId === user.id);
+/** Apakah data ini miliknya sendiri. */
+export function milikSendiri(user: Pengguna, pemilikId: string | null | undefined) {
+  return pemilikId != null && pemilikId === user.id;
 }
 
 /**
- * Hentikan permintaan dengan 404 kalau data bukan miliknya.
+ * Apakah pengguna boleh MEMBUKA satu data dengan pemilik tertentu.
+ * Admin & master boleh atas data siapa pun.
+ */
+export function bolehLihat(user: Pengguna, pemilikId: string | null | undefined) {
+  return user.admin || milikSendiri(user, pemilikId);
+}
+
+/**
+ * Apakah pengguna boleh MENGUBAH atau MENGHAPUS satu data — hanya pemiliknya,
+ * admin dan master sekalipun tidak.
+ *
+ * Isi laporan adalah hasil pengukuran yang sangat personal bagi Fismed yang
+ * mengerjakannya: angka bacaan alat, kondisi lingkungan saat uji, dan catatan
+ * lapangannya. Orang lain tidak punya dasar untuk mengubahnya, jadi akses
+ * lintas Fismed sengaja dibuat baca-saja.
+ */
+export function bolehUbah(user: Pengguna, pemilikId: string | null | undefined) {
+  return milikSendiri(user, pemilikId);
+}
+
+/**
+ * Hentikan permintaan dengan 404 kalau data tidak boleh dibuka.
  *
  * Sengaja 404, bukan 403, supaya keberadaan data milik orang lain tidak bocor
  * lewat perbedaan pesan error.
  */
-export function pastikanBoleh(user: Pengguna, pemilikId: string | null | undefined) {
-  if (!boleh(user, pemilikId)) notFound();
+export function pastikanBolehLihat(user: Pengguna, pemilikId: string | null | undefined) {
+  if (!bolehLihat(user, pemilikId)) notFound();
+}
+
+/**
+ * Hentikan permintaan dengan 404 kalau data tidak boleh diubah. Dipakai halaman
+ * yang isinya memang form sunting — buat admin, data Fismed lain di halaman
+ * seperti itu diperlakukan seolah tidak ada.
+ */
+export function pastikanBolehUbah(user: Pengguna, pemilikId: string | null | undefined) {
+  if (!bolehUbah(user, pemilikId)) notFound();
 }
 
 /** Halaman khusus admin & master — selainnya diperlakukan seolah tidak ada. */

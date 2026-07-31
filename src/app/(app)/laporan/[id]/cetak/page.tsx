@@ -9,7 +9,7 @@ import {
 import { namaLengkap, tanggalPanjang, teksAtauStrip } from "@/lib/format";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
-import { pastikanBoleh } from "@/lib/akses";
+import { bolehUbah, pastikanBolehLihat } from "@/lib/akses";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
 import { KETERANGAN_KETIDAKPASTIAN } from "@/lib/templates/common";
@@ -34,7 +34,8 @@ export default async function CetakLaporan({
     },
   });
   if (!laporan) notFound();
-  pastikanBoleh(user, laporan.userId);
+  pastikanBolehLihat(user, laporan.userId);
+  const bisaUbah = bolehUbah(user, laporan.userId);
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) notFound();
@@ -79,7 +80,7 @@ export default async function CetakLaporan({
       <div className="tanpa-cetak mb-4 flex flex-wrap items-center gap-2">
         <TombolCetak />
         <Link href={`/laporan/${laporan.id}`} className="tombol tombol-sekunder">
-          Kembali ke form
+          {bisaUbah ? "Kembali ke form" : "Kembali ke laporan"}
         </Link>
         <p className="text-xs text-[var(--muted)]">
           Pada dialog cetak, pilih tujuan &ldquo;Save as PDF&rdquo;, ukuran A4, dan matikan

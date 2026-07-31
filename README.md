@@ -225,13 +225,20 @@ master). Di sana tersedia daftar seluruh akun dan halaman per Fismed yang menamp
 laporan apa saja yang sudah dia kalibrasi beserta tautan untuk membuka dan mencetaknya.
 Tombol atur peran dan hapus akun hanya muncul untuk master.
 
+**Akses lintas Fismed bersifat baca-saja.** Admin dan master bisa membuka dan mencetak
+laporan Fismed lain, tetapi tidak menyuntingnya: yang dirender bukan form melainkan
+tabel hasil hitung, sama seperti yang tercetak di PDF. Alasannya, isi laporan adalah
+hasil pengukuran yang sangat personal bagi Fismed yang mengerjakannya — angka bacaan
+alat, kondisi lingkungan saat uji, dan catatan lapangannya. Orang lain tidak punya dasar
+untuk mengubah angka-angka itu.
+
 ### Tiga peran
 
-| Peran | Data sendiri | Buka laporan seluruh Fismed | Atur peran & hapus akun |
-|---|---|---|---|
-| **Fismed** | ✓ | – | – |
-| **Admin** | ✓ | ✓ | – |
-| **Master** | ✓ | ✓ | ✓ |
+| Peran | Data sendiri | Buka laporan Fismed lain | Sunting laporan Fismed lain | Atur peran & hapus akun |
+|---|---|---|---|---|
+| **Fismed** | ✓ | – | – | – |
+| **Admin** | ✓ | ✓ (baca-saja) | – | – |
+| **Master** | ✓ | ✓ (baca-saja) | – | ✓ |
 
 Peran disimpan di kolom `User.peran`. Bedanya pada cara mengubahnya:
 
@@ -249,8 +256,9 @@ Master juga tidak bisa mengubah peran atau menghapus akunnya sendiri.
 
 ### Hapus akun
 
-Tersedia di Profil → Fismed → pilih akun, khusus master. Master harus mengetik ulang
-email akun yang dihapus sebagai konfirmasi.
+Tersedia di **Profil → Fismed**, tombol tempat sampah merah di samping tombol atur peran,
+khusus master. Sekali klik membuka satu dialog konfirmasi yang merinci berapa laporan dan
+data master yang ikut terhapus.
 
 Laporan milik akun tersebut ikut terhapus. Data master (instansi, alat radiologi, alat
 ukur) juga terhapus **kecuali** yang masih dipakai laporan Fismed lain — yang seperti itu
@@ -263,29 +271,57 @@ Tiga lapis, dan ketiganya wajib:
 
 1. **Daftar** — `filterMilik()` / `filterLaporan()` di `src/lib/akses.ts` selalu menyaring
    ke milik sendiri.
-2. **Akses satuan** — `boleh()` memberi admin izin membuka/mengubah satu data milik
-   Fismed lain. Data yang bukan haknya menghasilkan 404, bukan 403, supaya keberadaannya
-   tidak bocor lewat perbedaan pesan.
-3. **Server action** — tiap simpan/hapus memverifikasi ulang kepemilikan. Lapis ini yang
-   sebenarnya mengamankan, karena server action bisa dipanggil lewat request langsung
-   tanpa melalui tombol di layar.
+2. **Akses satuan** — `bolehLihat()` memberi admin izin *membuka* satu data milik Fismed
+   lain; `bolehUbah()` hanya mengizinkan pemiliknya. Data yang bukan haknya menghasilkan
+   404, bukan 403, supaya keberadaannya tidak bocor lewat perbedaan pesan.
+3. **Server action** — tiap simpan/hapus memverifikasi ulang kepemilikan dengan
+   `bolehUbah()`. Lapis ini yang sebenarnya mengamankan, karena server action bisa
+   dipanggil lewat request langsung tanpa melalui tombol di layar. Menyembunyikan form
+   sunting saja tidak cukup.
 
 Dua hal yang mudah terlewat dan sudah ditangani:
 
-- Kepemilikan laporan **tidak berpindah** saat disunting, termasuk oleh admin — nama
-  Fismed pembuatnya tetap yang tercetak di kolom tanda tangan.
+- Kepemilikan laporan **tidak berpindah** saat disunting — nama Fismed pembuatnya tetap
+  yang tercetak di kolom tanda tangan.
 - Pilihan alat ukur pada form laporan mengikuti registry **pemilik laporan**, bukan
-  pengguna yang membuka. Tanpa ini, alat ukur yang sudah tercatat akan terhapus begitu
-  admin menyimpan laporan Fismed lain.
+  pengguna yang membuka, supaya alat ukur yang sudah tercatat tidak hilang saat laporan
+  disimpan.
 
 Ini mengubah keputusan PRD bagian 4 yang semula menetapkan data master bersifat bersama
 lintas Fismed.
 
-### Menambah Google sign-in / OTP
+### Masuk dengan Google
 
-`src/auth.ts` memakai Auth.js v5. Menambah provider Google atau email OTP cukup dengan
-menambah entri di array `providers` — tidak ada bagian lain aplikasi yang perlu berubah,
-karena semua halaman membaca sesi lewat `requireUser()` di `src/lib/session.ts`.
+Opsional dan mati secara bawaan. Isi `AUTH_GOOGLE_ID` dan `AUTH_GOOGLE_SECRET` untuk
+menyalakannya; kalau dikosongkan, providernya tidak didaftarkan dan tombolnya tidak
+ditampilkan — aplikasi tetap jalan penuh dengan email + kata sandi.
+
+Cara mendapatkan kredensialnya: Google Cloud Console → APIs & Services → Credentials →
+Create Credentials → OAuth client ID → Web application. Daftarkan redirect URI berikut:
+
+```
+http://localhost:3000/api/auth/callback/google      (lokal)
+https://<domain-anda>/api/auth/callback/google      (produksi)
+```
+
+Tiga hal yang perlu diketahui soal perilakunya:
+
+- **Akun disatukan berdasarkan email.** Fismed yang sudah punya akun email+sandi lalu
+  masuk lewat Google dengan alamat yang sama akan masuk ke akun yang sudah ada itu —
+  bukan membuat akun kedua yang laporannya terpisah. Nama, gelar, dan NIP yang sudah
+  disunting tidak tertimpa data profil Google.
+- **Hanya email yang sudah diverifikasi Google yang diterima** (`profile.email_verified`).
+  Ini yang membuat penyatuan lewat email di atas aman: tanpa itu, siapa pun yang
+  mendaftarkan alamat email Fismed lain di Google bisa mengambil alih akunnya.
+- **Akun buatan Google tidak punya kata sandi** (`User.passwordHash` boleh null), dan
+  jalur email+sandi menolak akun seperti itu. Gelar dan NIP-nya kosong sampai diisi
+  sendiri di halaman Profil — keduanya ikut tercetak di kolom tanda tangan laporan.
+
+### Menambah provider lain (OTP, dsb.)
+
+`src/auth.ts` memakai Auth.js v5. Menambah provider cukup dengan menambah entri di array
+`providers` — tidak ada bagian lain aplikasi yang perlu berubah, karena semua halaman
+membaca sesi lewat `requireUser()` di `src/lib/session.ts`.
 
 ## Yang sengaja di luar cakupan
 
