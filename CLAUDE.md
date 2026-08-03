@@ -144,14 +144,9 @@ never crash a Fismed's report page — and write with `JSON.stringify`. Queries 
 or index inside these; do it in TypeScript after parsing.
 
 `User.tandaTanganGambar` holds the Fismed's signature as a PNG data URL, and
-`Laporan.tandaTanganSnapshot` freezes a copy of it the moment a report is marked `selesai` —
-that transition *is* the act of signing, so drafts print unsigned and changing your signature
-never rewrites reports already finished. Re-signing means going back to draft and finishing
-again. There is no status dropdown: `status` is carried by the `name="status"` on whichever
-submit button was pressed ("Selesaikan Laporan" / "Kembalikan ke Draf"), while "Simpan
-Laporan" submits the status already in force. `simpanLaporan` therefore falls back to the
-stored status when the field is missing — never to `"draft"`, which would silently unsign a
-finished report. It is a deliberately **uncertified** electronic signature: a certified one (BSrE,
+`Laporan.tandaTanganSnapshot` freezes a copy of it the moment a report goes `selesai` — that
+transition *is* the act of signing, so drafts print unsigned and changing your signature
+never rewrites reports already signed. It is a deliberately **uncertified** electronic signature: a certified one (BSrE,
 Privy, VIDA) embeds a cryptographic certificate into the PDF, which the browser print dialog
 cannot do and which would contradict the report's own "bukan sertifikat resmi" status.
 Validation for both columns lives in `src/lib/tanda-tangan.ts` — whitelist PNG/JPEG data URLs
@@ -210,6 +205,28 @@ and delete accounts). `master` is **not** grantable in-app — it's synced from 
 `MASTER_EMAILS` env var on every login (`src/auth.ts` jwt callback), specifically so the
 app owner's access can't be revoked by anyone through the UI. (`ADMIN_EMAILS` is still
 read as a legacy fallback name when `MASTER_EMAILS` is unset.)
+
+### `status` is a one-way lock, not a label (`src/lib/laporan.ts`)
+
+`Laporan.status` has two values and only one legal transition: `draft` → `selesai`
+("Simpan Permanen"). There is no way back — not for the owner, not for master. `selesai`
+means signed *and frozen*: `simpanLaporan` rejects every edit to such a report, and
+`/laporan/[id]` renders `baca.tsx` instead of `form.tsx` even for the owner. The point is
+that measurements which have been signed must not be quietly adjusted afterwards, which is
+also why `hapusLaporan` lets only master delete a locked report — if the owner could delete
+and recreate, the lock would be theatre.
+
+Two consequences that look like over-engineering but aren't:
+- `simpanLaporan` **refuses to lock a report when the Fismed has no signature yet**
+  (`PESAN_BUTUH_TTD`). A report locked unsigned can never be signed, because signing
+  requires an edit. The dashboard's `PanduanAwal` dialog exists to stop new users reaching
+  that state at all.
+- An unrecognized `status` field falls back to `draft`, never to `selesai`. Locking must
+  only ever happen through the deliberate button, since it cannot be undone.
+
+Use `terkunci()`/`STATUS_*` from `src/lib/laporan.ts` rather than comparing the raw string —
+the values stay `"draft"`/`"selesai"` in the database, so renaming them would be a data
+migration for no gain.
 
 **Cross-Fismed access is read-only, by design.** Admin/master may open and print another
 Fismed's report but never edit it — report contents are that Fismed's personal

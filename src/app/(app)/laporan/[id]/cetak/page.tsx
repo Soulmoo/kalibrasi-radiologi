@@ -8,6 +8,7 @@ import {
   TandaTanganFismed,
 } from "@/components/lembar";
 import { namaLengkap, tanggalPanjang, teksAtauStrip } from "@/lib/format";
+import { terkunci } from "@/lib/laporan";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
 import { bolehUbah, pastikanBolehLihat } from "@/lib/akses";
@@ -48,19 +49,20 @@ export default async function CetakLaporan({
   // tercetak karena berada di dalam blok .tanpa-cetak.
   let catatanTtd: string | null = null;
   if (!laporan.tandaTanganSnapshot && bisaUbah) {
-    const profil = await prisma.user.findUnique({
-      where: { id: laporan.userId },
-      select: { tandaTanganGambar: true },
-    });
-    if (!profil?.tandaTanganGambar) {
+    if (terkunci(laporan.status)) {
+      // Hanya mungkin pada laporan yang sudah permanen sejak sebelum fitur
+      // tanda tangan ada. Tidak ada jalan memperbaikinya — menyunting laporan
+      // terkunci memang tidak diizinkan — jadi katakan apa adanya.
       catatanTtd =
-        "Kolom tanda tangan sengaja dikosongkan untuk ditandatangani manual. Pasang tanda tangan di halaman Profil kalau ingin tercetak otomatis.";
-    } else if (laporan.status !== "selesai") {
-      catatanTtd =
-        "Laporan ini masih Draf, jadi belum ditandatangani. Kembali ke form lalu tekan tombol “Selesaikan Laporan” — tanda tangan akan menempel di sini.";
+        "Laporan ini sudah tersimpan permanen sejak sebelum fitur tanda tangan ada, jadi kolomnya tetap kosong dan tidak bisa diisi lagi.";
     } else {
-      catatanTtd =
-        "Laporan ini sudah Selesai sejak sebelum tanda tangan dipasang. Buka form laporan dan tekan “Simpan Laporan” sekali lagi untuk membubuhkannya.";
+      const profil = await prisma.user.findUnique({
+        where: { id: laporan.userId },
+        select: { tandaTanganGambar: true },
+      });
+      catatanTtd = profil?.tandaTanganGambar
+        ? "Laporan ini masih Draf, jadi belum ditandatangani. Kembali ke form lalu tekan “Simpan Permanen” — tanda tangan akan menempel di sini."
+        : "Anda belum memasang tanda tangan. Pasang dulu di halaman Profil, karena laporan yang sudah disimpan permanen tidak bisa ditandatangani belakangan.";
     }
   }
 

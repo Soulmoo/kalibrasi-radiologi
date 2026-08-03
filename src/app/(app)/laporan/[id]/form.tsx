@@ -5,6 +5,7 @@ import { useActionState, useMemo, useState } from "react";
 import { simpanLaporan, type AksiState } from "@/app/actions/laporan";
 import { Field, PesanError, TabelGulir } from "@/components/field";
 import { draftKesimpulan, hitungBlok, rekapLaporan } from "@/lib/evaluasi";
+import { STATUS_DRAF, STATUS_PERMANEN } from "@/lib/laporan";
 import { getTemplate } from "@/lib/templates";
 import type {
   Baris,
@@ -58,10 +59,9 @@ export function FormLaporan({
 
   const rekap = useMemo(() => rekapLaporan(template, hasil), [template, hasil]);
 
-  // Sesudah menyimpan, status yang berlaku adalah yang dikembalikan server —
-  // tombolnya langsung bertukar tanpa menunggu halaman dimuat ulang.
-  const statusSekarang = state.status ?? laporan.status;
-  const selesai = statusSekarang === "selesai";
+  // Form ini hanya dirender untuk laporan draf — laporan yang sudah disimpan
+  // permanen dirender sebagai LaporanBacaSaja oleh page.tsx.
+  const [konfirmasi, setKonfirmasi] = useState(false);
 
   function setSel(blokId: string, barisKey: string, kolomKey: string, nilai: string) {
     setHasil((prev) => {
@@ -259,52 +259,38 @@ export function FormLaporan({
         </div>
       </section>
 
-      <PesanError pesan={state.error} />
+      {!konfirmasi && <PesanError pesan={state.error} />}
       {state.ok && (
         <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-          {selesai
-            ? "Laporan diselesaikan dan ditandatangani."
-            : "Laporan tersimpan sebagai draf."}
+          Draf tersimpan.
         </p>
       )}
 
       <div className="sticky bottom-0 border-t border-[var(--border)] bg-[var(--background)] py-3">
         <div className="flex flex-wrap items-center gap-2">
           {/* Status ditentukan tombol mana yang ditekan, bukan dropdown: nilai
-              name/value milik tombol submit ikut masuk ke FormData. Tombol
-              "Simpan Laporan" sengaja mengirim status yang sedang berlaku,
-              supaya menyimpan perubahan biasa tidak pernah mengubah status. */}
+              name/value milik tombol submit ikut masuk ke FormData. */}
           <button
             type="submit"
             name="status"
-            value={statusSekarang}
+            value={STATUS_DRAF}
             disabled={pending}
             className="tombol tombol-utama"
           >
-            {pending ? "Menyimpan…" : "Simpan Laporan"}
+            {pending ? "Menyimpan…" : "Simpan Draf"}
           </button>
 
-          {selesai ? (
-            <button
-              type="submit"
-              name="status"
-              value="draft"
-              disabled={pending}
-              className="tombol tombol-sekunder"
-            >
-              Kembalikan ke Draf
-            </button>
-          ) : (
-            <button
-              type="submit"
-              name="status"
-              value="selesai"
-              disabled={pending}
-              className="tombol tombol-selesai"
-            >
-              Selesaikan Laporan
-            </button>
-          )}
+          {/* Simpan permanen tidak bisa dibatalkan, jadi tidak boleh sekali
+              klik: tombol ini membuka dialog konfirmasi dulu. Tombol submit
+              yang sebenarnya ada di dalam dialog. */}
+          <button
+            type="button"
+            onClick={() => setKonfirmasi(true)}
+            disabled={pending}
+            className="tombol tombol-selesai"
+          >
+            Simpan Permanen
+          </button>
 
           <Link href={`/laporan/${laporan.id}/cetak`} className="tombol tombol-sekunder">
             Pratinjau &amp; Export PDF
@@ -313,24 +299,85 @@ export function FormLaporan({
             Kembali ke daftar
           </Link>
 
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-              selesai
-                ? "bg-green-100 text-green-900"
-                : "bg-amber-100 text-amber-900"
-            }`}
-          >
-            {selesai ? "Selesai · ditandatangani" : "Draf · belum ditandatangani"}
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
+            Draf · belum ditandatangani
           </span>
         </div>
 
         <p className="mt-2 text-xs text-[var(--muted)]">
-          {selesai
-            ? "Laporan sudah ditandatangani. Untuk menandatangani ulang dengan tanda tangan terbaru, kembalikan ke Draf lalu selesaikan lagi."
-            : "Selama masih Draf, laporan dicetak tanpa tanda tangan. Tekan “Selesaikan Laporan” untuk membubuhkan tanda tangan dari halaman Profil."}{" "}
-          Simpan dulu sebelum membuka pratinjau agar perubahan ikut tercetak.
+          Selama masih Draf, laporan dicetak tanpa tanda tangan dan masih bisa disunting
+          kapan saja. Simpan dulu sebelum membuka pratinjau agar perubahan ikut tercetak.
         </p>
       </div>
+
+      {konfirmasi && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="judul-simpan-permanen"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setKonfirmasi(false);
+          }}
+        >
+          <div className="kartu w-full max-w-lg p-5 text-left">
+            <h2 id="judul-simpan-permanen" className="text-sm font-semibold">
+              Simpan permanen laporan ini?
+            </h2>
+
+            <p className="mt-3 text-sm">
+              Laporan akan <strong>ditandatangani</strong> dengan tanda tangan dari halaman
+              Profil Anda, lalu <strong>dikunci</strong>.
+            </p>
+
+            <ul className="mt-3 space-y-1.5 text-sm text-[var(--muted)]">
+              <li>• Isi laporan tidak dapat diubah lagi — oleh siapa pun, termasuk Anda.</li>
+              <li>• Angka hasil uji, kesimpulan, dan catatan ikut terkunci.</li>
+              <li>• Laporan yang terkunci tidak bisa dihapus, kecuali oleh master.</li>
+              <li>• Laporan tetap bisa dibuka, dicetak, dan diekspor jadi PDF.</li>
+            </ul>
+
+            <p className="mt-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Penguncian ini yang membuat tanda tangan Anda berarti: hasil pengukuran yang
+              sudah ditandatangani tidak bisa dirapikan belakangan. Pastikan seluruh isian
+              sudah benar sebelum melanjutkan.
+            </p>
+
+            {/* Kegagalan ditampilkan di dalam dialog — yang paling sering
+                terjadi adalah belum ada tanda tangan di Profil, dan pesannya
+                tidak berguna kalau tersembunyi di balik dialog. */}
+            {state.error && (
+              <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                {state.error}
+              </p>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setKonfirmasi(false)}
+                disabled={pending}
+                className="tombol tombol-sekunder"
+              >
+                Batal, periksa lagi
+              </button>
+              {/* Dialog sengaja TIDAK ditutup di onClick: menutupnya akan
+                  melepas tombol ini dari DOM sebelum form benar-benar terkirim.
+                  Kalau berhasil, halaman berpindah ke tampilan terkunci dan
+                  seluruh form ini ikut hilang dengan sendirinya. */}
+              <button
+                type="submit"
+                name="status"
+                value={STATUS_PERMANEN}
+                disabled={pending}
+                className="tombol tombol-selesai"
+              >
+                {pending ? "Menyimpan…" : "Ya, simpan permanen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

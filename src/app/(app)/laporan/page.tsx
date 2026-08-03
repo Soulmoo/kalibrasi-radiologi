@@ -10,10 +10,10 @@ import type { Prisma } from "@prisma/client";
 export default async function HalamanLaporan({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; jenis?: string }>;
+  searchParams: Promise<{ q?: string; jenis?: string; error?: string }>;
 }) {
   const user = await requireUser();
-  const { q, jenis } = await searchParams;
+  const { q, jenis, error } = await searchParams;
 
   // Daftar ini selalu berisi laporan milik sendiri saja. Laporan Fismed lain
   // diakses admin lewat Profil → Fismed.
@@ -51,6 +51,13 @@ export default async function HalamanLaporan({
           </Link>
         }
       />
+
+      {error === "terkunci" && (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Laporan yang sudah disimpan permanen tidak dapat dihapus. Hubungi master bila
+          benar-benar perlu dihapus.
+        </p>
+      )}
 
       <form className="kartu mb-4 flex flex-wrap items-end gap-3 p-4">
         <label className="min-w-56 flex-1">

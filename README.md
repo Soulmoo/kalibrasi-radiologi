@@ -334,26 +334,60 @@ internal, bukan sertifikat resmi berlegalitas. Gambar tanda tangan tetap sah dis
 tangan elektronik menurut UU ITE — hanya kategorinya tidak tersertifikasi, dan kotak "Status
 dokumen" di halaman pertama laporan menyatakannya apa adanya.
 
-### Kapan tanda tangannya menempel
+### Simpan permanen — laporan ditandatangani lalu dikunci
 
-Laporan baru selalu berstatus **Draf**. Tanda tangan dibekukan saat Fismed menekan tombol
-**Selesaikan Laporan** di bawah form — momen itulah yang dianggap sebagai tindakan
-menandatangani. Salinannya disimpan di `Laporan.tandaTanganSnapshot`, sejajar maksudnya
-dengan `konfigurasiSnapshot`. Tidak ada dropdown status: status hanya berpindah lewat tombol
-**Selesaikan Laporan** dan **Kembalikan ke Draf**, sedangkan **Simpan Laporan** selalu
-mempertahankan status yang sedang berlaku.
+Laporan baru selalu berstatus **Draf** dan bebas disunting. Ada dua tombol di bawah form:
 
-Akibatnya:
+- **Simpan Draf** — menyimpan tanpa mengubah status, dipakai berkali-kali selama pengisian.
+- **Simpan Permanen** — membuka dialog konfirmasi, lalu menandatangani sekaligus **mengunci**
+  laporan.
 
-- Laporan berstatus **Draf tidak bertanda tangan**; yang tercetak ruang kosong.
-- Mengganti tanda tangan di Profil **tidak mengubah laporan yang sudah selesai**.
-- Untuk menandatangani ulang dengan tanda tangan baru: **Kembalikan ke Draf**, lalu
-  **Selesaikan Laporan** sekali lagi.
-- Fismed yang belum memasang tanda tangan tetap mendapat ruang kosong seperti sebelumnya,
-  jadi laporan masih bisa dicetak lalu ditandatangani basah.
+Menyimpan permanen itulah tindakan menandatangani: tanda tangan disalin dari Profil ke
+`Laporan.tandaTanganSnapshot`, sejajar maksudnya dengan `konfigurasiSnapshot`.
 
-Kalau kolom tanda tangan kosong padahal seharusnya terisi, halaman pratinjau cetak
-menjelaskan sebabnya lewat catatan kuning yang hanya tampil di layar — tidak ikut tercetak.
+**Setelah permanen, laporan tidak dapat diubah lagi oleh siapa pun** — termasuk pemiliknya
+sendiri dan master. Halamannya berganti jadi tampilan baca-saja, dan `simpanLaporan`
+menolak setiap penyuntingan. Inilah inti fiturnya: hasil pengukuran yang sudah
+ditandatangani tidak boleh bisa dirapikan setelah laporan terbit, jadi tanda tangannya
+benar-benar menjamin sesuatu.
+
+Konsekuensi yang perlu diketahui sebelum menekannya:
+
+- Angka hasil uji, kesimpulan, catatan, dan rekomendasi ikut terkunci.
+- Laporan terkunci **tidak bisa dihapus pemiliknya** — hanya master. Kalau pemilik masih
+  bisa menghapus lalu membuat ulang, penguncian cuma formalitas.
+- Mengganti tanda tangan di Profil tidak mengubah laporan yang sudah permanen.
+- Tidak ada jalan kembali ke Draf. Periksa seluruh isian dulu.
+
+**Tanda tangan wajib dipasang sebelum menyimpan permanen.** Kalau belum ada, aksinya ditolak
+dengan pesan yang mengarahkan ke halaman Profil — bukan sekadar cerewet, karena laporan yang
+terlanjur terkunci tanpa tanda tangan tidak akan pernah bisa ditandatangani.
+
+Selama masih Draf, laporan tetap bisa dicetak dan ditandatangani basah seperti biasa; yang
+tercetak adalah ruang kosong. Kalau kolom tanda tangan kosong padahal seharusnya terisi,
+halaman pratinjau cetak menjelaskan sebabnya lewat catatan kuning yang hanya tampil di layar
+— tidak ikut tercetak.
+
+### Panduan singkat
+
+Dashboard menampilkan dialog panduan **sekali di awal tiap sesi masuk**: penjelasan singkat
+fungsi aplikasi dan urutan kerjanya dari instansi sampai simpan permanen. Sengaja bukan
+hanya untuk pengguna baru — langkah terakhirnya tidak bisa dibatalkan, jadi pengingatnya
+tetap berguna.
+
+Yang berubah setelah tanda tangan terpasang hanyalah blok "pasang tanda tangan dulu" yang
+ikut hilang; sisa panduannya tetap ditampilkan.
+
+Ada dua cara menutupnya:
+
+- **Mengerti** — menutup untuk sesi ini saja; panduannya muncul lagi saat masuk berikutnya.
+- **Jangan tampilkan lagi** — mematikannya seterusnya untuk Fismed tersebut.
+
+Penandanya disimpan di `sessionStorage` dan `localStorage`, dibedakan per pengguna, jadi
+tidak perlu kolom apa pun di database dan berganti akun di tab yang sama tidak ikut membawa
+keputusan akun sebelumnya. Mematikan panduan tidak berisiko: kalau tanda tangannya memang
+belum ada, `simpanLaporan` tetap menolak simpan permanen dengan pesan yang mengarahkan ke
+halaman Profil.
 
 Admin dan master yang membuka laporan Fismed lain ikut mendapat tanda tangan pemiliknya saat
 mencetak — dokumen itu memang hasil kerja Fismed tersebut, dan aksesnya tetap baca-saja.

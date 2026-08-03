@@ -4,13 +4,19 @@ import { tanggalPanjang, teksAtauStrip } from "@/lib/format";
 import type { HasilUji, Template } from "@/lib/templates/types";
 
 /**
- * Tampilan laporan Fismed lain untuk admin & master — baca-saja.
+ * Tampilan laporan baca-saja. Dipakai untuk dua keadaan yang berbeda:
+ *
+ * - `lintas-fismed` — admin/master membuka laporan Fismed lain.
+ * - `terkunci` — laporan sudah disimpan permanen, jadi pemiliknya sendiri pun
+ *   tidak bisa menyuntingnya lagi.
  *
  * Angka hasil uji tidak ditampilkan sebagai input, melainkan sebagai tabel
  * hasil hitung yang sama persis dengan yang tercetak di PDF. Ini bukan sekadar
  * menyembunyikan tombol simpan: form suntingnya memang tidak dirender, dan
- * server action `simpanLaporan` juga menolak siapa pun selain pemilik laporan.
+ * server action `simpanLaporan` menolak kedua keadaan itu sekali lagi.
  */
+
+export type AlasanBacaSaja = "lintas-fismed" | "terkunci";
 
 export type LaporanBaca = {
   nomorLaporan: string | null;
@@ -40,21 +46,31 @@ export function LaporanBacaSaja({
   template,
   hasil,
   pemilik,
+  alasan,
 }: {
   laporan: LaporanBaca;
   template: Template;
   hasil: HasilUji;
   pemilik: string;
+  alasan: AlasanBacaSaja;
 }) {
   const rekap = rekapLaporan(template, hasil);
 
   return (
     <div className="space-y-5">
-      <p className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>Mode baca-saja.</strong> Laporan ini milik {pemilik}. Isinya hanya bisa
-        diubah oleh Fismed yang mengerjakan pengukurannya — Anda bisa membuka dan
-        mencetaknya, tetapi tidak menyuntingnya.
-      </p>
+      {alasan === "terkunci" ? (
+        <p className="rounded border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
+          <strong>Tersimpan permanen.</strong> Laporan ini sudah ditandatangani dan
+          dikunci, jadi isinya tidak dapat diubah lagi oleh siapa pun — termasuk Anda
+          sendiri. Masih bisa dibuka, dicetak, dan diekspor jadi PDF.
+        </p>
+      ) : (
+        <p className="rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Mode baca-saja.</strong> Laporan ini milik {pemilik}. Isinya hanya bisa
+          diubah oleh Fismed yang mengerjakan pengukurannya — Anda bisa membuka dan
+          mencetaknya, tetapi tidak menyuntingnya.
+        </p>
+      )}
 
       <div className="kartu p-5">
         <h2 className="mb-3 text-sm font-semibold">Identitas laporan</h2>

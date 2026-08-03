@@ -4,6 +4,7 @@ import { hapusLaporan } from "@/app/actions/laporan";
 import { JudulHalaman } from "@/components/field";
 import { bolehUbah, filterMilikPengguna, pastikanBolehLihat } from "@/lib/akses";
 import { namaLengkap, tanggalInput, tanggalPanjang } from "@/lib/format";
+import { terkunci } from "@/lib/laporan";
 import { parseJson } from "@/lib/json";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
@@ -33,11 +34,17 @@ export default async function HalamanLaporan({
   if (!laporan) notFound();
   pastikanBolehLihat(user, laporan.userId);
 
-  // Admin & master boleh membuka laporan Fismed lain, tetapi tidak menyuntingnya:
-  // isi laporan adalah hasil pengukuran yang sangat personal bagi Fismed yang
-  // mengerjakannya. Untuk mereka form sunting tidak dirender sama sekali —
-  // lihat juga penolakan di server action `simpanLaporan`.
-  const bisaUbah = bolehUbah(user, laporan.userId);
+  // Dua sebab form sunting tidak dirender, dan keduanya juga ditolak ulang di
+  // server action `simpanLaporan` — menyembunyikan form saja tidak mengunci
+  // apa pun, karena server action bisa dipanggil lewat request langsung.
+  //
+  // 1. Admin & master boleh membuka laporan Fismed lain, tetapi tidak
+  //    menyuntingnya: isinya hasil pengukuran yang sangat personal bagi Fismed
+  //    yang mengerjakannya.
+  // 2. Laporan yang sudah disimpan permanen tidak bisa disunting siapa pun,
+  //    termasuk pemiliknya sendiri.
+  const dikunci = terkunci(laporan.status);
+  const bisaUbah = bolehUbah(user, laporan.userId) && !dikunci;
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) {
@@ -67,7 +74,8 @@ export default async function HalamanLaporan({
           <Link href={`/laporan/${laporan.id}/cetak`} className="tombol tombol-sekunder">
             Pratinjau &amp; Export PDF
           </Link>
-          {bisaUbah && (
+          {/* Laporan terkunci hanya boleh dihapus master — lihat hapusLaporan. */}
+          {(dikunci ? user.master : bolehUbah(user, laporan.userId)) && (
             <form action={hapusLaporan}>
               <input type="hidden" name="id" value={laporan.id} />
               <button type="submit" className="tombol tombol-bahaya">
@@ -88,6 +96,7 @@ export default async function HalamanLaporan({
           template={template}
           hasil={hasil}
           pemilik={namaLengkap(laporan.user)}
+          alasan={dikunci ? "terkunci" : "lintas-fismed"}
           laporan={{
             nomorLaporan: laporan.nomorLaporan,
             nomorOrder: laporan.nomorOrder,

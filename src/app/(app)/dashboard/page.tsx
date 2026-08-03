@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { TEMPLATES, namaJenisAlat } from "@/lib/templates";
 import { tanggalPanjang } from "@/lib/format";
+import { PanduanAwal } from "./panduan";
 
 export default async function Dashboard() {
   const user = await requireUser();
@@ -12,8 +13,14 @@ export default async function Dashboard() {
   const milik = filterMilik(user);
   const milikLaporan = filterLaporan(user);
 
-  const [jumlahLaporan, jumlahInstansi, jumlahAlat, alatUkurKadaluarsa, terbaru] =
-    await Promise.all([
+  const [
+    jumlahLaporan,
+    jumlahInstansi,
+    jumlahAlat,
+    alatUkurKadaluarsa,
+    terbaru,
+    profil,
+  ] = await Promise.all([
       prisma.laporan.count({ where: milikLaporan }),
       prisma.instansi.count({ where: milik }),
       prisma.alatRadiologi.count({ where: milik }),
@@ -28,10 +35,21 @@ export default async function Dashboard() {
         take: 8,
         include: { instansi: true },
       }),
+      // Hanya untuk mengetahui apakah tanda tangannya sudah ada. Gambarnya
+      // sendiri tidak pernah dibawa ke sini — lihat catatan di profil/page.tsx
+      // soal ukuran cookie sesi.
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { tandaTanganGambar: true },
+      }),
     ]);
 
   return (
     <div className="space-y-6">
+      <PanduanAwal
+        userId={user.id}
+        punyaTandaTangan={Boolean(profil?.tandaTanganGambar)}
+      />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Halo, {user.nama}</h1>
