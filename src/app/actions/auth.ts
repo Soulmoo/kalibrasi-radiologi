@@ -2,11 +2,17 @@
 
 import { hash } from "bcryptjs";
 import { AuthError } from "next-auth";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import {
+  PESAN_TTD_TIDAK_VALID,
+  TTD_HAPUS,
+  tandaTanganValid,
+} from "@/lib/tanda-tangan";
 
 export type FormState = { error?: string; ok?: boolean };
 
@@ -109,14 +115,32 @@ export async function simpanProfil(_prev: FormState, formData: FormData): Promis
   });
   if (!hasil.success) return { error: hasil.error.issues[0]?.message ?? "Data tidak valid" };
 
+  // Tanda tangan dikirim lewat satu field dengan tiga nilai bermakna:
+  // "" = tidak diubah, "hapus" = kosongkan, selain itu data URL pengganti.
+  //
+  // Penjagaan yang sebenarnya ada di sini, bukan di komponennya: nilainya
+  // datang dari klien lalu dirender jadi <img src> di lembar cetak, jadi
+  // apa pun yang tidak lolos tandaTanganValid() ditolak mentah-mentah.
+  const ttdMasuk = String(formData.get("tandaTangan") ?? "");
+  let tandaTanganGambar: string | null | undefined;
+  if (ttdMasuk === TTD_HAPUS) {
+    tandaTanganGambar = null;
+  } else if (ttdMasuk !== "") {
+    if (!tandaTanganValid(ttdMasuk)) return { error: PESAN_TTD_TIDAK_VALID };
+    tandaTanganGambar = ttdMasuk;
+  }
+
   await prisma.user.update({
     where: { id: user.id },
     data: {
       nama: hasil.data.nama,
       gelar: hasil.data.gelar || null,
       nip: hasil.data.nip || null,
+      // `undefined` = kolom tidak disentuh sama sekali.
+      tandaTanganGambar,
     },
   });
 
+  revalidatePath("/profil");
   return { ok: true };
 }

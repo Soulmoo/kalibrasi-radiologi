@@ -29,9 +29,19 @@ model User {
   /// kata sandi sama sekali, dan masuk lewat email+sandi ditolak untuknya.
   passwordHash String?
 
-  /// "fismed" (default) atau "admin". Akun admin bisa melihat laporan seluruh
-  /// Fismed dan mengubah peran akun lain lewat halaman Profil → Fismed.
+  /// "fismed" (default), "admin", atau "master". Admin bisa MEMBUKA laporan
+  /// seluruh Fismed (baca-saja); master bisa mengubah peran dan menghapus akun.
+  /// Peran "master" tidak diatur dari dalam aplikasi — sumbernya env
+  /// MASTER_EMAILS, disinkronkan tiap login. Lihat src/lib/peran.ts.
   peran String @default("fismed")
+
+  /// Gambar tanda tangan Fismed sebagai data URL PNG/JPEG (base64), diisi
+  /// sendiri lewat halaman Profil. Tanda tangan elektronik TIDAK tersertifikasi
+  /// — cukup untuk laporan kerja internal, lihat README bagian Tanda Tangan.
+  ///
+  /// JANGAN pernah menyalin kolom ini ke token JWT di src/auth.ts: cookie sesi
+  /// dibatasi ~4 KB dan gambar base64 akan melewatinya.
+  tandaTanganGambar String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -128,6 +138,13 @@ model Laporan {
   /// seluruh hasil uji (termasuk uji kondisi lingkungan), mengikuti skema
   /// template modalitas di src/lib/templates
   hasilUji String @default("{}")
+
+  /// Salinan beku tanda tangan Fismed pada saat laporan ditandai "selesai" —
+  /// momen itulah yang dianggap sebagai tindakan menandatangani. Sejajar
+  /// maksudnya dengan konfigurasiSnapshot: mengganti tanda tangan di Profil
+  /// tidak boleh mengubah laporan yang sudah selesai. Kosong = belum
+  /// ditandatangani, lembar cetak menyediakan ruang tanda tangan basah.
+  tandaTanganSnapshot String?
 
   kesimpulan  String?
   catatan     String?

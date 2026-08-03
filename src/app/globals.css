@@ -80,6 +80,16 @@ body {
 .tombol-sekunder:hover {
   background: #eef1f5;
 }
+/* Menyelesaikan laporan = menandatanganinya. Sengaja dibedakan dari
+   tombol-utama supaya tidak tertukar dengan Simpan Laporan yang dipakai
+   berkali-kali selama pengisian. */
+.tombol-selesai {
+  background: #147a44;
+  color: #fff;
+}
+.tombol-selesai:hover {
+  background: #106236;
+}
 .tombol-bahaya {
   background: #fff;
   border-color: #e6b7b7;
@@ -180,6 +190,17 @@ body {
   overflow-wrap: anywhere;
 }
 
+/* Gambar tanda tangan Fismed. Tinggi kotaknya ditentukan komponen
+   TandaTanganFismed dan tetap sama walau tanda tangannya belum ada, jadi di
+   sini gambarnya cukup dipaskan ke dalam kotak itu tanpa mengubah tinggi baris
+   nama/NIP di bawahnya. */
+.lembar-ttd {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 @media print {
   html,
   body {
@@ -205,6 +226,12 @@ body {
   .hindari-potong {
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+  /* Sebagian browser memucatkan gambar demi menghemat tinta. Tanda tangan
+     tidak boleh ikut dipucatkan — itu justru bagian yang harus terbaca. */
+  .lembar-ttd {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
   thead {
     display: table-header-group;

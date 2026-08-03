@@ -317,6 +317,47 @@ Tiga hal yang perlu diketahui soal perilakunya:
   jalur email+sandi menolak akun seperti itu. Gelar dan NIP-nya kosong sampai diisi
   sendiri di halaman Profil — keduanya ikut tercetak di kolom tanda tangan laporan.
 
+## Tanda tangan Fismed
+
+Fismed memasang gambar tanda tangannya sekali di **Profil**, lalu gambar itu tercetak
+otomatis pada kolom tanda tangan laporan. Dua cara mengisinya: mengunggah foto/hasil pindai
+tanda tangan di kertas (PNG/JPG), atau menggambarnya langsung di kotak kanvas dengan mouse
+maupun jari. Keduanya dikecilkan di browser ke lebar maksimum 600 px dan disimpan sebagai
+data URL PNG di kolom `User.tandaTanganGambar`.
+
+**Ini tanda tangan elektronik tidak tersertifikasi, dan memang itu yang dipakai.** Tanda
+tangan elektronik *tersertifikasi* (BSrE, Privy, VIDA, Peruri) menanam sertifikat
+kriptografis ke dalam berkas PDF-nya — mustahil lewat dialog cetak browser, dan
+menambahkannya berarti membongkar keputusan "tanpa Puppeteer/Chromium" yang jadi dasar
+ekspor PDF di aplikasi ini. Dokumen yang dihasilkan juga sudah berstatus laporan kerja
+internal, bukan sertifikat resmi berlegalitas. Gambar tanda tangan tetap sah disebut tanda
+tangan elektronik menurut UU ITE — hanya kategorinya tidak tersertifikasi, dan kotak "Status
+dokumen" di halaman pertama laporan menyatakannya apa adanya.
+
+### Kapan tanda tangannya menempel
+
+Laporan baru selalu berstatus **Draf**. Tanda tangan dibekukan saat Fismed menekan tombol
+**Selesaikan Laporan** di bawah form — momen itulah yang dianggap sebagai tindakan
+menandatangani. Salinannya disimpan di `Laporan.tandaTanganSnapshot`, sejajar maksudnya
+dengan `konfigurasiSnapshot`. Tidak ada dropdown status: status hanya berpindah lewat tombol
+**Selesaikan Laporan** dan **Kembalikan ke Draf**, sedangkan **Simpan Laporan** selalu
+mempertahankan status yang sedang berlaku.
+
+Akibatnya:
+
+- Laporan berstatus **Draf tidak bertanda tangan**; yang tercetak ruang kosong.
+- Mengganti tanda tangan di Profil **tidak mengubah laporan yang sudah selesai**.
+- Untuk menandatangani ulang dengan tanda tangan baru: **Kembalikan ke Draf**, lalu
+  **Selesaikan Laporan** sekali lagi.
+- Fismed yang belum memasang tanda tangan tetap mendapat ruang kosong seperti sebelumnya,
+  jadi laporan masih bisa dicetak lalu ditandatangani basah.
+
+Kalau kolom tanda tangan kosong padahal seharusnya terisi, halaman pratinjau cetak
+menjelaskan sebabnya lewat catatan kuning yang hanya tampil di layar — tidak ikut tercetak.
+
+Admin dan master yang membuka laporan Fismed lain ikut mendapat tanda tangan pemiliknya saat
+mencetak — dokumen itu memang hasil kerja Fismed tersebut, dan aksesnya tetap baca-saja.
+
 ### Menambah provider lain (OTP, dsb.)
 
 `src/auth.ts` memakai Auth.js v5. Menambah provider cukup dengan menambah entri di array

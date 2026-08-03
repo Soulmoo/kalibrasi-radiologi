@@ -3,11 +3,18 @@
 import { useActionState } from "react";
 import { simpanProfil, type FormState } from "@/app/actions/auth";
 import { Field, PesanError } from "@/components/field";
+import { InputTandaTangan } from "./tanda-tangan";
 
 export function FormProfil({
   user,
 }: {
-  user: { nama: string; gelar: string | null; nip: string | null; email: string };
+  user: {
+    nama: string;
+    gelar: string | null;
+    nip: string | null;
+    email: string;
+    tandaTanganGambar: string | null;
+  };
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(simpanProfil, {});
 
@@ -20,6 +27,13 @@ export function FormProfil({
         <Field label="Email" petunjuk="Email tidak dapat diubah dari halaman ini.">
           <input value={user.email} disabled className="input-dasar" />
         </Field>
+      </div>
+
+      {/* Sengaja tidak dibungkus <Field>: komponennya berisi tombol dan kanvas,
+          dan <Field> merender <label> — mengeklik kanvas di dalam label akan
+          memicu kontrol lain. */}
+      <div className="kartu space-y-4 p-5">
+        <InputTandaTangan awal={user.tandaTanganGambar} />
       </div>
 
       <PesanError pesan={state.error} />

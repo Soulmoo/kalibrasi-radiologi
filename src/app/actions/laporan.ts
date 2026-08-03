@@ -7,7 +7,13 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { getTemplate } from "@/lib/templates";
 
-export type AksiState = { error?: string; ok?: boolean; tersimpanPada?: string };
+export type AksiState = {
+  error?: string;
+  ok?: boolean;
+  tersimpanPada?: string;
+  /** status laporan sesudah penyimpanan, dipakai form untuk menukar tombolnya */
+  status?: string;
+};
 
 function teks(fd: FormData, key: string): string | null {
   const v = fd.get(key);
@@ -89,6 +95,45 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
     }
   }
 
+  // Menandai laporan "selesai" ITULAH tindakan menandatanganinya: tanda tangan
+  // Fismed disalin dari profil ke laporan dan dibekukan di sana, sejajar dengan
+  // konfigurasiSnapshot. Mengganti tanda tangan di Profil setelahnya tidak
+  // mengubah laporan yang sudah selesai.
+  //
+  // bolehUbah() di atas menjamin penyimpan = pemilik laporan, jadi tidak pernah
+  // ada keraguan siapa yang menandatangani.
+  // Status tidak datang dari dropdown melainkan dari TOMBOL mana yang ditekan
+  // (name="status" pada tombol submit, lihat form.tsx). Nilai yang tidak
+  // dikenali berarti tombolnya tidak ikut terkirim — status lama dipertahankan,
+  // supaya penyimpanan biasa tidak pernah diam-diam membatalkan laporan yang
+  // sudah selesai beserta tanda tangannya.
+  const statusMasuk = teks(fd, "status");
+  const status =
+    statusMasuk === "selesai"
+      ? "selesai"
+      : statusMasuk === "draft"
+        ? "draft"
+        : laporan.status;
+  let tandaTanganSnapshot: string | null | undefined;
+  if (status === "draft") {
+    // Dikembalikan ke draf = mencabut tanda tangan. Ini juga satu-satunya cara
+    // menandatangani ulang dengan tanda tangan yang baru: draf → simpan →
+    // selesai → simpan.
+    tandaTanganSnapshot = null;
+  } else if (!laporan.tandaTanganSnapshot) {
+    // Syarat "masih kosong" menutup dua hal sekaligus: penyimpanan biasa pada
+    // laporan yang sudah selesai tidak diam-diam menandatangani ulang, dan
+    // Fismed yang menandai selesai dulu baru mengunggah tanda tangan tetap
+    // mendapatkannya pada penyimpanan berikutnya.
+    const profil = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { tandaTanganGambar: true },
+    });
+    // Tetap null kalau Fismed belum punya tanda tangan — lembar cetak jatuh ke
+    // ruang kosong untuk ditandatangani basah, seperti sebelum fitur ini ada.
+    tandaTanganSnapshot = profil?.tandaTanganGambar ?? null;
+  }
+
   // Alat ukur yang boleh ditautkan adalah milik pemilik laporan. Divalidasi
   // ulang di server supaya request langsung tidak bisa menautkan alat ukur
   // milik Fismed lain.
@@ -113,8 +158,11 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
         kesimpulan: teks(fd, "kesimpulan"),
         catatan: teks(fd, "catatan"),
         rekomendasi: teks(fd, "rekomendasi"),
-        status: teks(fd, "status") === "selesai" ? "selesai" : "draft",
+        status,
         hasilUji,
+        // `undefined` = kolom tidak disentuh (laporan selesai yang sudah
+        // bertanda tangan, disimpan ulang).
+        tandaTanganSnapshot,
         // Kepemilikan laporan tidak dipindahkan saat disunting — nama Fismed
         // pembuatnya tetap yang tercetak di kolom tanda tangan, dan laporan
         // tidak berpindah dari daftar miliknya ketika akun master membukanya.
@@ -132,7 +180,7 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
 
   revalidatePath(`/laporan/${id}`);
   revalidatePath("/laporan");
-  return { ok: true, tersimpanPada: new Date().toISOString() };
+  return { ok: true, tersimpanPada: new Date().toISOString(), status };
 }
 
 export async function hapusLaporan(fd: FormData) {

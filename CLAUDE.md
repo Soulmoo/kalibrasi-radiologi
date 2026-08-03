@@ -11,7 +11,14 @@ enter raw measurements, the app calculates derived parameters and pass/fail verd
 exports a print-ready PDF report with a Fismed signature block. This produces internal
 working reports, not official BAPETEN/BPAFK-legal certificates. Implements
 `PRD_Aplikasi_Kalibrasi_Radiologi.md` (v0.5) — most in-repo comments and docs cite specific
-PRD sections; when behavior looks arbitrary, check the cited section before changing it.
+PRD sections, so behavior that looks arbitrary usually isn't.
+
+**The PRD itself is not in this repo** and never has been (nor is it gitignored) — every
+`PRD bagian N` / `Lampiran A` citation points at a document only the user has. Don't go
+hunting for the file. The in-repo stand-ins are `README.md`'s "Validasi Rumus" section
+(per-modality comparison of every formula against the six BPAFK reference documents,
+including the parameters deliberately left un-calculated) and the doc comments on the
+functions themselves. If a decision hinges on what a PRD section actually says, ask.
 
 The UI, code comments, and commit messages are in Indonesian. Match that when editing
 existing files.
@@ -35,7 +42,15 @@ migrate deploy && next build`) is what Vercel runs on deploy — don't run `pris
 deploy` manually against production, it happens automatically at build time.
 
 Requires Postgres (Neon or Vercel Storage) for both local and prod — see `.env.example`
-for `DATABASE_URL`, `AUTH_SECRET`, `MASTER_EMAILS`.
+for `DATABASE_URL`, `AUTH_SECRET`, `MASTER_EMAILS`, and the optional
+`AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`.
+
+Run only **one** dev server at a time. Two of them share the same `.next` directory and
+corrupt each other's generated types; the symptom is `tsc` failing inside
+`.next/dev/types/routes.d.ts` with syntax errors that have nothing to do with your code.
+`rm -rf .next` fixes it. Same cause if the IDE flags a Prisma field that `tsc` accepts —
+there, restart the TS server, since VS Code doesn't watch `node_modules` for the
+regenerated client after a schema change.
 
 ## Architecture
 
@@ -102,14 +117,58 @@ Keep **Keluar out of the mobile header** — it previously sat in the cramped to
 directly above the tab strip, and users logged themselves out by mistapping it while
 reaching for a tab. It now lives at the bottom of the drawer, separated by a divider.
 
+Test mobile layout with Chrome DevTools' device toolbar or a real phone on the LAN — **not**
+an in-editor mobile preview. Those render the app in a cross-origin webview, and the
+session cookie is `SameSite=Lax`, so client-side navigations arrive without it and every
+tab click bounces to `/masuk`. It reads exactly like a random-logout bug but is an artifact
+of the preview tool; the server is fine. Never "fix" it by switching the cookie to
+`SameSite=None` — that is the app's CSRF protection.
+
 ### Data model (`prisma/schema.prisma`)
 
-`User` → `Instansi` (client/institution, shared across Fismed) → `AlatRadiologi`
-(equipment registry, `jenisAlat` is the template key, `konfigurasi` is a per-modality JSON
-blob) → `Laporan` (report; `hasilUji` JSON follows the owning template's schema,
-`konfigurasiSnapshot` freezes the equipment config at report time so later profile edits
-don't rewrite history). `AlatUkur` (measurement-instrument registry) relates to `Laporan`
-many-to-many via `LaporanAlatUkur`.
+`User` → `Instansi` (client/institution) → `AlatRadiologi` (equipment registry, `jenisAlat`
+is the template key, `konfigurasi` is a per-modality JSON blob) → `Laporan` (report;
+`hasilUji` JSON follows the owning template's schema, `konfigurasiSnapshot` freezes the
+equipment config at report time so later profile edits don't rewrite history). `AlatUkur`
+(measurement-instrument registry) relates to `Laporan` many-to-many via `LaporanAlatUkur`.
+
+Several doc comments in `schema.prisma` predate the ownership model below and are now
+wrong — `Instansi` is *not* "shared lintas Fismed", and `peran` has three values, not two.
+`src/lib/akses.ts` and `src/lib/peran.ts` are the truth; fix the comment if you touch the
+model, but never take it as spec.
+
+**Every JSON column is a Postgres `String`, not Prisma's `Json` type** (`konfigurasi`,
+`konfigurasiSnapshot`, `hasilUji`). Always read through `parseJson()` (`src/lib/json.ts`),
+which swallows parse errors and falls back — a corrupt blob must degrade to an empty form,
+never crash a Fismed's report page — and write with `JSON.stringify`. Queries can't filter
+or index inside these; do it in TypeScript after parsing.
+
+`User.tandaTanganGambar` holds the Fismed's signature as a PNG data URL, and
+`Laporan.tandaTanganSnapshot` freezes a copy of it the moment a report is marked `selesai` —
+that transition *is* the act of signing, so drafts print unsigned and changing your signature
+never rewrites reports already finished. Re-signing means going back to draft and finishing
+again. There is no status dropdown: `status` is carried by the `name="status"` on whichever
+submit button was pressed ("Selesaikan Laporan" / "Kembalikan ke Draf"), while "Simpan
+Laporan" submits the status already in force. `simpanLaporan` therefore falls back to the
+stored status when the field is missing — never to `"draft"`, which would silently unsign a
+finished report. It is a deliberately **uncertified** electronic signature: a certified one (BSrE,
+Privy, VIDA) embeds a cryptographic certificate into the PDF, which the browser print dialog
+cannot do and which would contradict the report's own "bukan sertifikat resmi" status.
+Validation for both columns lives in `src/lib/tanda-tangan.ts` — whitelist PNG/JPEG data URLs
+only. The value arrives from the client and is rendered into `<img src>`, so an SVG data URL
+there would be a script-injection vector; never loosen that regex into a blacklist.
+
+Nothing computed is ever stored. `Laporan.hasilUji` holds only what Fismed typed (all cells
+as strings, so a literal `"-"` stays writable); every derived value, verdict, and summary is
+recomputed from the template on each render. The report form posts the whole `hasilUji`
+object as one JSON string form field and `simpanLaporan` only checks that it parses.
+
+`normalisasiHasil()` (`templates/types.ts`) merges stored JSON onto the *current* template's
+shape on every read, which is why editing a template doesn't break existing reports: unknown
+block ids are dropped, missing ones fill in empty, `modeBaris: "tetap"` rows match by `_key`
+while `"dinamis"` rows are taken wholesale. The flip side — renaming a `Blok.id`, a fixed
+row `key`, or a `Kolom.key` silently orphans data already saved under the old name. Treat
+those three as a data migration, not a rename.
 
 ### Auth & three-role ownership model
 
@@ -126,6 +185,24 @@ only safe because the `signIn` callback rejects anything without
 `profile.email_verified === true` — don't relax that check. Google accounts have
 `passwordHash === null`, and `authorize()` rejects those so the credentials path can't be
 used to attack them.
+
+Two guards in `src/auth.ts` look like dead weight but are load-bearing:
+- A custom `logger` downgrades `JWTSessionError` to a single `console.warn`. That error
+  means the session cookie can't be decrypted — routine after an `AUTH_SECRET` change, and
+  it heals on the next sign-in. It repeats on *every* request because `auth()` runs in
+  Server Components, which can't write cookies, so Auth.js never gets to clear the bad
+  cookie. Everything else still goes to `console.error`.
+- The jwt callback's Prisma work sits in a `try/catch` that returns the existing token.
+  Auth.js invokes that callback inside its own `try/catch`, so anything thrown there
+  discards the session cookie — one transient Neon connection blip would log a Fismed out
+  mid-form and lose unsaved measurements. `return null` (which does kill the session) is
+  reserved for the query *succeeding* and finding no row, i.e. the account was deleted.
+
+The jwt callback copies profile fields onto the token, but **never put
+`tandaTanganGambar` there.** The session cookie caps at ~4 KB; a base64 PNG blows past it and
+the cookie is silently truncated, which logs every Fismed out with no usable error. Pages
+that need the image read it from Prisma directly — `profil/page.tsx` does exactly that even
+though it already has the session.
 
 Three roles in `User.peran`: `fismed` (own data only) < `admin` (can also *read* any
 Fismed's reports, via Profil → Fismed) < `master` (can additionally change others' roles
@@ -159,8 +236,62 @@ Two easy-to-miss rules already handled correctly — don't regress them:
 - The `AlatUkur` picker on the report form must use the **report owner's** registry, not
   the viewing user's, so already-recorded instruments aren't wiped on save.
 
+Deleting an account (`hapusAkun`, `src/app/actions/pengguna.ts`) is not a cascade. Inside
+one transaction it drops the account's own reports, then for each instansi / alat radiologi
+/ alat ukur checks whether another Fismed's report still references it: still-referenced
+rows are **reassigned to the deleting master**, only unreferenced ones are deleted. Foreign
+keys can't express that, so any new owned model needs its own branch here or account
+deletion starts breaking other people's reports.
+
 This intentionally overrides the original PRD §4 assumption that master data is shared
 across all Fismed.
+
+### Server action conventions (`src/app/actions/`)
+
+Two shapes, and which one a function uses is a UI decision, not a style choice:
+- `(prevState, FormData) => Promise<AksiState>` — form saves, driven by `useActionState`.
+  Failures `return { error: "..." }` so the message renders in place next to the form and
+  the Fismed's typing survives. Success ends in `redirect()`, except `simpanLaporan`, which
+  returns `{ ok, tersimpanPada }` so the long report form can save without navigating away.
+- `(FormData) => Promise<void>` — deletes and role changes, fired from plain submit buttons.
+  These have nowhere to render a message, so they signal by `redirect("/path?error=<kode>")`
+  / `?ok=<kode>` and the destination page renders the code.
+
+Neither shape throws for expected failures. Validation is hand-rolled `teks()`/`tanggal()`
+FormData helpers, duplicated per file on purpose; zod appears only in `actions/auth.ts`
+(register, sign-in, profile). Access checks belong at the top of every action — see the
+three layers above.
+
+`masukGoogle()` is the one action that must **not** be wrapped in try/catch: `signIn`
+completes by throwing its redirect to Google, so swallowing it leaves the user staring at a
+page that did nothing. Google-side failures come back through `pages.error` in
+`src/auth.ts`. The credentials actions pass `redirect: false` and catch only `AuthError` —
+anything else rethrows, for the same reason.
+
+### Deploying, and the Google OAuth redirect URI
+
+Vercel's environment variables are a separate store from the gitignored `.env` — nothing in
+`.env` ever reaches production. Adding or changing one there does **not** affect running
+deployments either; it is injected at build time, so a redeploy is required.
+
+Google matches the redirect URI character for character. Production is
+`https://kalibrasi-radiologi.vercel.app/api/auth/callback/google`, and that exact string
+must be registered under **Authorized redirect URIs** (not JavaScript origins). Preview
+deployment URLs carry a per-deploy hash and therefore change on every push, so Google
+sign-in can never work on a preview — use email + password there.
+
+To read the redirect URI the app actually sends instead of guessing at a
+`redirect_uri_mismatch`, POST a csrfToken to `/api/auth/signin/google` and pull
+`redirect_uri` out of the `Location` header:
+
+```bash
+CSRF=$(curl -s -c /tmp/c.txt "$BASE/api/auth/csrf" | sed 's/.*"csrfToken":"\([^"]*\)".*/\1/')
+curl -s -i -b /tmp/c.txt -X POST "$BASE/api/auth/signin/google" -d "csrfToken=$CSRF" \
+  | grep -i '^location:' | grep -o 'redirect_uri=[^&]*'
+```
+
+`/api/auth/providers` is the quickest check of whether Google is configured at all in a
+given environment — if it lists only `credentials`, the env vars are missing there.
 
 ### Relative sign convention for `kesalahanRelatif()`
 

@@ -58,6 +58,11 @@ export function FormLaporan({
 
   const rekap = useMemo(() => rekapLaporan(template, hasil), [template, hasil]);
 
+  // Sesudah menyimpan, status yang berlaku adalah yang dikembalikan server —
+  // tombolnya langsung bertukar tanpa menunggu halaman dimuat ulang.
+  const statusSekarang = state.status ?? laporan.status;
+  const selesai = statusSekarang === "selesai";
+
   function setSel(blokId: string, barisKey: string, kolomKey: string, nilai: string) {
     setHasil((prev) => {
       const blok = prev[blokId];
@@ -251,35 +256,80 @@ export function FormLaporan({
             <textarea name="rekomendasi" rows={3} defaultValue={laporan.rekomendasi ?? ""} className="input-dasar" />
           </Field>
 
-          <Field label="Status">
-            <select name="status" defaultValue={laporan.status} className="input-dasar sm:w-56">
-              <option value="draft">Draf</option>
-              <option value="selesai">Selesai</option>
-            </select>
-          </Field>
         </div>
       </section>
 
       <PesanError pesan={state.error} />
       {state.ok && (
         <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
-          Laporan tersimpan.
+          {selesai
+            ? "Laporan diselesaikan dan ditandatangani."
+            : "Laporan tersimpan sebagai draf."}
         </p>
       )}
 
-      <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-[var(--border)] bg-[var(--background)] py-3">
-        <button type="submit" disabled={pending} className="tombol tombol-utama">
-          {pending ? "Menyimpan…" : "Simpan Laporan"}
-        </button>
-        <Link href={`/laporan/${laporan.id}/cetak`} className="tombol tombol-sekunder">
-          Pratinjau &amp; Export PDF
-        </Link>
-        <Link href="/laporan" className="tombol tombol-sekunder">
-          Kembali ke daftar
-        </Link>
-        <span className="self-center text-xs text-[var(--muted)]">
+      <div className="sticky bottom-0 border-t border-[var(--border)] bg-[var(--background)] py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status ditentukan tombol mana yang ditekan, bukan dropdown: nilai
+              name/value milik tombol submit ikut masuk ke FormData. Tombol
+              "Simpan Laporan" sengaja mengirim status yang sedang berlaku,
+              supaya menyimpan perubahan biasa tidak pernah mengubah status. */}
+          <button
+            type="submit"
+            name="status"
+            value={statusSekarang}
+            disabled={pending}
+            className="tombol tombol-utama"
+          >
+            {pending ? "Menyimpan…" : "Simpan Laporan"}
+          </button>
+
+          {selesai ? (
+            <button
+              type="submit"
+              name="status"
+              value="draft"
+              disabled={pending}
+              className="tombol tombol-sekunder"
+            >
+              Kembalikan ke Draf
+            </button>
+          ) : (
+            <button
+              type="submit"
+              name="status"
+              value="selesai"
+              disabled={pending}
+              className="tombol tombol-selesai"
+            >
+              Selesaikan Laporan
+            </button>
+          )}
+
+          <Link href={`/laporan/${laporan.id}/cetak`} className="tombol tombol-sekunder">
+            Pratinjau &amp; Export PDF
+          </Link>
+          <Link href="/laporan" className="tombol tombol-sekunder">
+            Kembali ke daftar
+          </Link>
+
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              selesai
+                ? "bg-green-100 text-green-900"
+                : "bg-amber-100 text-amber-900"
+            }`}
+          >
+            {selesai ? "Selesai · ditandatangani" : "Draf · belum ditandatangani"}
+          </span>
+        </div>
+
+        <p className="mt-2 text-xs text-[var(--muted)]">
+          {selesai
+            ? "Laporan sudah ditandatangani. Untuk menandatangani ulang dengan tanda tangan terbaru, kembalikan ke Draf lalu selesaikan lagi."
+            : "Selama masih Draf, laporan dicetak tanpa tanda tangan. Tekan “Selesaikan Laporan” untuk membubuhkan tanda tangan dari halaman Profil."}{" "}
           Simpan dulu sebelum membuka pratinjau agar perubahan ikut tercetak.
-        </span>
+        </p>
       </div>
     </form>
   );

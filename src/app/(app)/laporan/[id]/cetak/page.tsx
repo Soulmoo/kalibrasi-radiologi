@@ -5,6 +5,7 @@ import {
   BlokLembar,
   DaftarData,
   JudulSeksiLembar,
+  TandaTanganFismed,
 } from "@/components/lembar";
 import { namaLengkap, tanggalPanjang, teksAtauStrip } from "@/lib/format";
 import { parseJson } from "@/lib/json";
@@ -39,6 +40,29 @@ export default async function CetakLaporan({
 
   const template = getTemplate(laporan.jenisAlat);
   if (!template) notFound();
+
+  // Kolom tanda tangan yang kosong nyaris selalu bikin bingung: Fismed sudah
+  // memasang tanda tangannya di Profil, lalu heran kenapa tidak muncul di sini.
+  // Sebabnya bisa tiga hal, jadi sekalian dibedakan. Hanya ditampilkan ke
+  // pemilik laporan — cuma dia yang bisa memperbaikinya — dan tidak pernah ikut
+  // tercetak karena berada di dalam blok .tanpa-cetak.
+  let catatanTtd: string | null = null;
+  if (!laporan.tandaTanganSnapshot && bisaUbah) {
+    const profil = await prisma.user.findUnique({
+      where: { id: laporan.userId },
+      select: { tandaTanganGambar: true },
+    });
+    if (!profil?.tandaTanganGambar) {
+      catatanTtd =
+        "Kolom tanda tangan sengaja dikosongkan untuk ditandatangani manual. Pasang tanda tangan di halaman Profil kalau ingin tercetak otomatis.";
+    } else if (laporan.status !== "selesai") {
+      catatanTtd =
+        "Laporan ini masih Draf, jadi belum ditandatangani. Kembali ke form lalu tekan tombol “Selesaikan Laporan” — tanda tangan akan menempel di sini.";
+    } else {
+      catatanTtd =
+        "Laporan ini sudah Selesai sejak sebelum tanda tangan dipasang. Buka form laporan dan tekan “Simpan Laporan” sekali lagi untuk membubuhkannya.";
+    }
+  }
 
   const hasil = normalisasiHasil(template, parseJson(laporan.hasilUji, {}));
   const konf = parseJson<Record<string, string | string[]>>(
@@ -77,15 +101,22 @@ export default async function CetakLaporan({
 
   return (
     <div>
-      <div className="tanpa-cetak mb-4 flex flex-wrap items-center gap-2">
-        <TombolCetak />
-        <Link href={`/laporan/${laporan.id}`} className="tombol tombol-sekunder">
-          {bisaUbah ? "Kembali ke form" : "Kembali ke laporan"}
-        </Link>
-        <p className="text-xs text-[var(--muted)]">
-          Pada dialog cetak, pilih tujuan &ldquo;Save as PDF&rdquo;, ukuran A4, dan matikan
-          header/footer bawaan browser.
-        </p>
+      <div className="tanpa-cetak mb-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <TombolCetak />
+          <Link href={`/laporan/${laporan.id}`} className="tombol tombol-sekunder">
+            {bisaUbah ? "Kembali ke form" : "Kembali ke laporan"}
+          </Link>
+          <p className="text-xs text-[var(--muted)]">
+            Pada dialog cetak, pilih tujuan &ldquo;Save as PDF&rdquo;, ukuran A4, dan matikan
+            header/footer bawaan browser.
+          </p>
+        </div>
+        {catatanTtd && (
+          <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <strong>Tanda tangan belum tercetak.</strong> {catatanTtd}
+          </p>
+        )}
       </div>
 
       <div className="lembar">
@@ -134,9 +165,10 @@ export default async function CetakLaporan({
           >
             <strong>Status dokumen.</strong> Laporan ini merupakan laporan kerja internal
             hasil kalibrasi alat radiologi. Dokumen ini bukan sertifikat resmi
-            berlegalitas dan tidak ditandatangani secara elektronik bersertifikat.
-            Ketidakpastian pengukuran dilaporkan pada tingkat kepercayaan 95 % dengan
-            faktor cakupan k = 2.
+            berlegalitas dan tidak ditandatangani secara elektronik bersertifikat —
+            tanda tangan pada dokumen ini berupa tanda tangan elektronik tidak
+            tersertifikasi. Ketidakpastian pengukuran dilaporkan pada tingkat kepercayaan
+            95 % dengan faktor cakupan k = 2.
           </div>
 
           <div style={{ marginTop: "12mm", display: "flex", justifyContent: "flex-end" }}>
@@ -146,13 +178,12 @@ export default async function CetakLaporan({
                 {tanggalPanjang(laporan.tanggalTerbit ?? laporan.tanggalUji)}
               </p>
               <p style={{ fontSize: "8.6pt", marginTop: "1mm" }}>Fisikawan Medis</p>
-              <div style={{ height: "20mm" }} />
-              <p style={{ fontSize: "8.6pt", fontWeight: 700, borderTop: "0.6pt solid #333", paddingTop: "1mm" }}>
-                {penguji}
-              </p>
-              {laporan.user.nip && (
-                <p style={{ fontSize: "8pt" }}>NIP. {laporan.user.nip}</p>
-              )}
+              <TandaTanganFismed
+                gambar={laporan.tandaTanganSnapshot}
+                nama={penguji}
+                nip={laporan.user.nip}
+                tinggi="20mm"
+              />
             </div>
           </div>
 
@@ -295,18 +326,12 @@ export default async function CetakLaporan({
 
             <JudulSeksiLembar>1.8. Fisikawan Medis</JudulSeksiLembar>
             <div style={{ marginTop: "3mm", width: "70mm" }}>
-              <div style={{ height: "18mm" }} />
-              <p
-                style={{
-                  fontSize: "8.6pt",
-                  fontWeight: 700,
-                  borderTop: "0.6pt solid #333",
-                  paddingTop: "1mm",
-                }}
-              >
-                {penguji}
-              </p>
-              {laporan.user.nip && <p style={{ fontSize: "8pt" }}>NIP. {laporan.user.nip}</p>}
+              <TandaTanganFismed
+                gambar={laporan.tandaTanganSnapshot}
+                nama={penguji}
+                nip={laporan.user.nip}
+                tinggi="18mm"
+              />
             </div>
           </div>
 

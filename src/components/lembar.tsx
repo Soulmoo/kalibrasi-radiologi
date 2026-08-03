@@ -39,6 +39,60 @@ export function JudulSeksiLembar({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Kolom tanda tangan Fismed: ruang tanda tangan, garis, nama, lalu NIP.
+ *
+ * `gambar` berasal dari `Laporan.tandaTanganSnapshot` — tanda tangan yang
+ * dibekukan saat laporan ditandai selesai, bukan yang sedang tersimpan di
+ * profil. Kalau kosong (laporan masih draf, atau Fismed belum memasang tanda
+ * tangan), yang dirender adalah ruang kosong seperti sebelum fitur ini ada,
+ * supaya laporan tetap bisa ditandatangani basah setelah dicetak.
+ *
+ * `tinggi` selalu dipakai apa adanya, baik ada gambar maupun tidak — itu yang
+ * menjaga tata letak halaman tidak bergeser antara laporan bertanda tangan dan
+ * yang belum.
+ */
+export function TandaTanganFismed({
+  gambar,
+  nama,
+  nip,
+  tinggi,
+}: {
+  gambar: string | null;
+  nama: string;
+  nip?: string | null;
+  tinggi: string;
+}) {
+  return (
+    <>
+      <div
+        style={{
+          height: tinggi,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+        }}
+      >
+        {gambar && (
+          // eslint-disable-next-line @next/next/no-img-element -- data URL dari database, bukan aset yang bisa dioptimalkan next/image
+          <img src={gambar} alt="" className="lembar-ttd" />
+        )}
+      </div>
+      <p
+        style={{
+          fontSize: "8.6pt",
+          fontWeight: 700,
+          borderTop: "0.6pt solid #333",
+          paddingTop: "1mm",
+        }}
+      >
+        {nama}
+      </p>
+      {nip && <p style={{ fontSize: "8pt" }}>NIP. {nip}</p>}
+    </>
+  );
+}
+
 /** Render satu blok parameter uji sebagai tabel berbingkai siap cetak. */
 export function BlokLembar({ blok, hasil }: { blok: Blok; hasil: HasilUji }) {
   const t = hitungBlok(blok, hasil);
