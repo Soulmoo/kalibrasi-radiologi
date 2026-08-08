@@ -56,12 +56,13 @@ regenerated client after a schema change.
 
 ### Configurable templates, not hard-coded forms (the core pattern)
 
-Every modalitas (radiography, CT-scan, dental, angiography, C-arm, MRI) is defined as one
+Every modalitas (radiografi mobile, CT-scan, gigi, angiografi, C-arm, MRI) is defined as one
 schema object in `src/lib/templates/<modalitas>.ts`, typed by `src/lib/templates/types.ts`.
 The form UI, auto-calculation, pass/fail evaluation, and PDF layout are all generated from
 that schema — there is no per-modality form component or PDF page to write. To add a
 modality: create the template file following `ct-scan.ts`'s shape, then register it in
-`src/lib/templates/index.ts`.
+`src/lib/templates/index.ts`. That registry is the full MVP set; USG is deliberately
+deferred until BPAFK publishes its test parameters.
 
 Key schema concepts (`types.ts`):
 - `Template.seksi[].blok[]` — a report is sections of blocks (tables).
@@ -81,7 +82,11 @@ Key schema concepts (`types.ts`):
 
 Angiography and C-arm share report structure: the common parts live in
 `src/lib/templates/fluoroskopi.ts` and both templates call into it; C-arm adds its own
-extra parameter section on top.
+extra parameter section on top. `src/lib/templates/common.ts` holds what *every* modality
+shares — `seksiKondisiLingkungan()` (the ambient temp/humidity/pressure section, PRD 6.2),
+`KONF_SISTEM_PENCITRAAN`, `REKOMENDASI_DEFAULT`, `KETERANGAN_KETIDAKPASTIAN`. Compose those
+in a new template rather than copying the literals; they are worded to match the reference
+documents and drift silently if duplicated.
 
 Runtime flow: `src/lib/evaluasi.ts` (`hitungBlok`, `rekapLaporan`, `draftKesimpulan`) takes
 a `Template` + stored `HasilUji` JSON and produces computed cell text + verdicts.
@@ -89,11 +94,35 @@ a `Template` + stored `HasilUji` JSON and produces computed cell text + verdicts
 `src/components/lembar.tsx` renders the computed result as the print-ready report, reused
 by both the on-screen preview and the `/laporan/[id]/cetak` PDF page.
 
+The report form (`/laporan/[id]/form.tsx`) is one client component that holds the entire
+`hasilUji` object in a single `useState` and re-runs `rekapLaporan()` in a `useMemo` on
+every keystroke — that is the live verdict preview. There is no per-cell or per-block save
+endpoint: the whole object goes to `simpanLaporan` as one JSON string field. Keep it that
+way; splitting the state or saving incrementally would mean recomputing on the server for
+each cell, and derived values are explicitly never persisted.
+
 PDF export has no headless-browser dependency: `/laporan/[id]/cetak` renders the report
 inside `@page`/`@media print` CSS and the "Cetak / Simpan sebagai PDF" button just invokes
 the browser print dialog (destination "Save as PDF", A4, browser header/footer off). This
 was a deliberate choice to avoid needing Puppeteer/Chromium on serverless Vercel and to
 guarantee the PDF always matches the on-screen layout exactly.
+
+### Routing, auth gating, and cache invalidation
+
+**There is no `src/middleware.ts`.** Nothing guards routes centrally — `(app)/layout.tsx`
+calls `requireUser()` (which `redirect`s to `/masuk`), and every page under it calls
+`requireUser()`/`getUser()` again for its own data scoping. A new authenticated page must
+therefore live inside the `(app)` group *and* fetch the session itself; a route added
+outside that group is public by default, and no middleware will catch the mistake.
+
+This is Next.js 16 (React 19) — `params` and `searchParams` are `Promise`s and are awaited
+in every page here. Follow AGENTS.md and check `node_modules/next/dist/docs/` before
+reaching for an API you remember from an older version.
+
+Nothing uses route-segment caching config or `use cache`; freshness comes entirely from
+every mutating server action ending in `revalidatePath()` for each list and detail route it
+touches. A new action that omits it leaves stale rows on the dashboard and history pages
+with no other symptom.
 
 ### Layout conventions
 
@@ -107,6 +136,13 @@ stay readable rather than collapsing.
 The print sheet (`.lembar-halaman`) is deliberately a fixed 210mm — do not make it
 responsive, since matching the printed PDF exactly is the whole point of the preview.
 `.lembar` scrolls horizontally on screen instead (screen-only; never in `@media print`).
+
+Pages are built from the primitives in `src/components/field.tsx` (`Field`, `PesanError`,
+`JudulHalaman`, `KosongPesan`, `TabelGulir`) styled by the `.tombol` / `.tabel-data` /
+`--brand` custom-property classes in `src/app/globals.css` — there is no component library.
+Report-facing text goes through `src/lib/format.ts`: `tanggalPanjang()` for the Indonesian
+long dates printed on the sheet, `tanggalInput()` for `<input type="date">`, `namaLengkap()`
+for the "nama, gelar" signature line, `teksAtauStrip()` for the empty→`-` convention.
 
 Role badges come from `<LencanaPeran peran={...} />` (`src/components/lencana-peran.tsx`).
 Never derive a badge from `user.admin` — that flag is true for admin *and* master.

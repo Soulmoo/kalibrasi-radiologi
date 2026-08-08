@@ -189,8 +189,8 @@ async function main() {
     "kolimasi-selisih": {
       meta: { sid: "100" },
       rows: [
-        { _key: "x", selisih: "1.2" },
-        { _key: "y", selisih: "1.5" },
+        { _key: "x", eksak: "24.0", terukur: "25.2" },
+        { _key: "y", eksak: "30.0", terukur: "31.5" },
       ],
     },
     "kolimasi-alignment": { meta: {}, rows: [{ _key: "theta", theta: "1.9" }] },

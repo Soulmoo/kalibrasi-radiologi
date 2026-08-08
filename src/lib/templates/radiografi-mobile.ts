@@ -9,8 +9,9 @@ import {
   persenSID,
   rerata,
 } from "@/lib/calc";
+import type { Angka } from "@/lib/calc";
 import { REKOMENDASI_DEFAULT, seksiKondisiLingkungan } from "./common";
-import type { Template, Verdict } from "./types";
+import type { Baris, Template, Verdict } from "./types";
 
 /**
  * Radiografi Mobile / Pesawat Sinar-X Umum.
@@ -23,6 +24,25 @@ import type { Template, Verdict } from "./types";
 
 const lolosJika = (ok: boolean | null): Verdict =>
   ok === null ? "na" : ok ? "lolos" : "tidak-lolos";
+
+/**
+ * Selisih lapangan kolimasi per sumbu:
+ *     Δ = lapangan berkas sinar-X (terukur) − lapangan kolimasi (eksak)
+ * mengikuti konvensi tanda (terukur − set) di PRD Lampiran A.1.1. Verdict
+ * memakai |Δ|, jadi arah tandanya tidak mengubah lolos/tidak lolos.
+ *
+ * Sebelum kolom eksak/terukur ada, Fismed mengetik Δ langsung ke kolom
+ * `selisih`. Nilai lama itu tetap dipakai selama kedua kolom baru belum terisi:
+ * laporan yang sudah disimpan permanen tidak bisa disunting lagi untuk mengisi
+ * kolom baru, sehingga tanpa cadangan ini hasil dan verdict laporan yang sudah
+ * ditandatangani akan berubah menjadi "-" / "Tidak dilakukan".
+ */
+function selisihLapangan(b: Baris): Angka {
+  const eksak = num(b.eksak);
+  const terukur = num(b.terukur);
+  if (eksak === null || terukur === null) return num(b.selisih);
+  return terukur - eksak;
+}
 
 export const radiografiMobile: Template = {
   key: "radiografi-mobile",
@@ -124,11 +144,23 @@ export const radiografiMobile: Template = {
         {
           id: "kolimasi-selisih",
           judul: "Selisih Lapangan Kolimasi dengan Lapangan Berkas Sinar-X",
+          catatan:
+            "Isi ukuran lapangan kolimasi (nilai eksak yang diatur) dan lapangan berkas " +
+            "sinar-X (hasil ukur) pada tiap sumbu; selisih dan Δ terhadap SID dihitung sistem.",
           metaFields: [{ key: "sid", label: "SID", satuan: "cm", jenis: "number", lebar: "10rem" }],
           modeBaris: "tetap",
           kolom: [
-            { key: "_label", label: "Sumbu", jenis: "label", lebar: "26%" },
-            { key: "selisih", label: "Selisih", satuan: "cm", jenis: "number" },
+            { key: "_label", label: "Sumbu", jenis: "label", lebar: "18%" },
+            { key: "eksak", label: "Lapangan Kolimasi (eksak)", satuan: "cm", jenis: "number" },
+            { key: "terukur", label: "Lapangan Sinar-X (terukur)", satuan: "cm", jenis: "number" },
+            {
+              key: "selisih",
+              label: "Selisih (Δ)",
+              satuan: "cm",
+              jenis: "hitung",
+              desimal: 2,
+              hitung: (b) => selisihLapangan(b),
+            },
             {
               key: "persen",
               label: "Δ terhadap SID",
@@ -136,7 +168,7 @@ export const radiografiMobile: Template = {
               jenis: "hitung",
               desimal: 1,
               akhiran: " %",
-              hitung: (b, ctx) => persenSID(num(b.selisih), num(ctx.meta.sid)),
+              hitung: (b, ctx) => persenSID(selisihLapangan(b), num(ctx.meta.sid)),
             },
           ],
           baris: [
@@ -145,7 +177,7 @@ export const radiografiMobile: Template = {
           ],
           toleransi: "Δ ≤ 2 % SID",
           evaluasi: (b, ctx) => {
-            const p = persenSID(num(b.selisih), num(ctx.meta.sid));
+            const p = persenSID(selisihLapangan(b), num(ctx.meta.sid));
             return lolosJika(p === null ? null : Math.abs(p) <= 2);
           },
         },
