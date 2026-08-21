@@ -451,28 +451,28 @@ export const radiografiMobile: Template = {
       ],
     },
 
-    {
-      id: "dosis",
-      judul: "C. Informasi Dosis Pasien",
-      blok: [
-        {
-          id: "dosis-pasien",
-          judul: "Informasi Dosis Pasien",
-          catatan: "Tabel informatif — tidak dievaluasi lolos/tidak lolos.",
-          modeBaris: "dinamis",
-          barisAwalDinamis: 2,
-          barisBaru: { objek: "", kvp: "", mas: "", jarak: "", kerma: "", ketidakpastian: "" },
-          tanpaEvaluasi: true,
-          kolom: [
-            { key: "objek", label: "Objek", jenis: "text", placeholder: "Thorax" },
-            { key: "kvp", label: "kVp Uji", jenis: "number" },
-            { key: "mas", label: "mAs Uji", jenis: "number" },
-            { key: "jarak", label: "Jarak Fokus–Detektor", satuan: "cm", jenis: "number" },
-            { key: "kerma", label: "Hasil Ukur Kerma", satuan: "mGy", jenis: "number" },
-            { key: "ketidakpastian", label: "Ketidakpastian Pengukuran", jenis: "text", placeholder: "± 1.7" },
-          ],
-        },
-      ],
-    },
+    // {
+    //   id: "dosis",
+    //   judul: "C. Informasi Dosis Pasien",
+    //   blok: [
+    //     {
+    //       id: "dosis-pasien",
+    //       judul: "Informasi Dosis Pasien",
+    //       catatan: "Tabel informatif — tidak dievaluasi lolos/tidak lolos.",
+    //       modeBaris: "dinamis",
+    //       barisAwalDinamis: 2,
+    //       barisBaru: { objek: "", kvp: "", mas: "", jarak: "", kerma: "", ketidakpastian: "" },
+    //       tanpaEvaluasi: true,
+    //       kolom: [
+    //         { key: "objek", label: "Objek", jenis: "text", placeholder: "Thorax" },
+    //         { key: "kvp", label: "kVp Uji", jenis: "number" },
+    //         { key: "mas", label: "mAs Uji", jenis: "number" },
+    //         { key: "jarak", label: "Jarak Fokus–Detektor", satuan: "cm", jenis: "number" },
+    //         { key: "kerma", label: "Hasil Ukur Kerma", satuan: "mGy", jenis: "number" },
+    //         { key: "ketidakpastian", label: "Ketidakpastian Pengukuran", jenis: "text", placeholder: "± 1.7" },
+    //       ],
+    //     },
+    //   ],
+    // },
   ],
 };
