@@ -46,7 +46,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  laporan Laporan[]
+  laporan    Laporan[]
+  auditDosis AuditDosis[]
 }
 
 /// Data instansi/klien. Shared lintas Fismed (PRD 6.1a).
@@ -69,8 +70,9 @@ model Instansi {
   updatedAt   DateTime @updatedAt
   createdById String?
 
-  alat    AlatRadiologi[]
-  laporan Laporan[]
+  alat       AlatRadiologi[]
+  laporan    Laporan[]
+  auditDosis AuditDosis[]
 }
 
 /// Asset registry alat radiologi. Konfigurasi teknis disimpan sebagai JSON string
@@ -91,8 +93,9 @@ model AlatRadiologi {
   updatedAt   DateTime @updatedAt
   createdById String?
 
-  instansi Instansi  @relation(fields: [instansiId], references: [id], onDelete: Cascade)
-  laporan  Laporan[]
+  instansi   Instansi     @relation(fields: [instansiId], references: [id], onDelete: Cascade)
+  laporan    Laporan[]
+  auditDosis AuditDosis[]
 
   @@index([instansiId])
   @@index([jenisAlat])
@@ -163,6 +166,77 @@ model Laporan {
   @@index([instansiId])
   @@index([jenisAlat])
   @@index([tanggalUji])
+}
+
+/// Audit dosis pasien terhadap Tingkat Panduan Diagnostik Indonesia (TPDI).
+///
+/// Dasar: Perba BAPETEN No. 4/2020 Pasal 48 (Pemegang Izin wajib menerapkan TPD)
+/// dan Pedoman Teknis PRK/PD/01/00/2021 butir 3.1.4 (evaluasi minimal sekali
+/// setahun). Sengaja DIPISAH dari Laporan: kalibrasi terjadi per kunjungan alat,
+/// audit dosis berjalan per periode tahunan dan mengumpulkan ratusan baris data
+/// pasien. Selain itu audit dosis tidak mengenal lolos/tidak lolos, sedangkan
+/// rekap Laporan menerjemahkan setiap verdict jadi Laik Pakai / Tidak Laik Pakai.
+///
+/// Satu baris = satu periode audit untuk satu alat. Pengelompokan per jenis
+/// pemeriksaan x kelompok umur dihitung ulang di TypeScript saat render, tidak
+/// pernah disimpan — sama prinsipnya dengan hasil hitung di Laporan.
+model AuditDosis {
+  id              String @id @default(cuid())
+  userId          String
+  instansiId      String
+  alatRadiologiId String
+
+  /// Kunci tabel TPDI di src/lib/tpdi.ts: "radiografi-umum" | "ct-scan".
+  /// Bukan kunci template modalitas — TPDI hanya tersedia untuk kedua ini.
+  modalitas String
+
+  periodeMulai   DateTime
+  periodeSelesai DateTime
+
+  /// Jalur pengambilan dosis, Pedoman Teknis butir 3.2.4.1.1 vs 3.2.4.1.2:
+  /// "indikator" = dibaca dari konsol/DICOM pesawat (Jalur A);
+  /// "estimasi"  = dihitung dari keluaran radiasi uji kesesuaian (Jalur B).
+  /// Keduanya saling eksklusif, bukan dua tahap berurutan.
+  metode String
+
+  /// Laporan kalibrasi sumber data keluaran radiasi untuk Jalur B. Opsional:
+  /// keluaran radiasi boleh juga diisi manual dari pengukuran mandiri Fismed.
+  laporanSumberId String?
+
+  /// Parameter Jalur B yang DIBEKUKAN saat audit dibuat: hasil regresi
+  /// {a, n, r2}, jarak ukur keluaran (cm), BSF, dan jarak fokus-meja.
+  /// Sejajar maksudnya dengan Laporan.konfigurasiSnapshot — kalibrasi ulang
+  /// belakangan tidak boleh menulis ulang audit yang sudah berjalan.
+  parameter String @default("{}")
+
+  /// Array baris data pasien sebagai JSON string, bentuknya di
+  /// src/lib/audit-dosis.ts. Seluruh sel disimpan sebagai string seperti
+  /// Laporan.hasilUji, dan tidak ada nilai terhitung yang ikut tersimpan.
+  ///
+  /// BERISI IDENTITAS PASIEN (nama, kode, jenis kelamin, umur, berat badan).
+  /// Nama pasien TIDAK PERNAH dirender di lembar cetak — yang dilaporkan ke
+  /// BAPETEN adalah nilai tipikal per grup, bukan daftar pasien. Aksi
+  /// hapusIdentitasPasien di src/app/actions/audit-dosis.ts mengosongkan
+  /// identitas tanpa mengubah angka dosisnya.
+  dataPasien String @default("[]")
+
+  catatan String?
+
+  /// draft | selesai. Satu arah seperti Laporan.status: "selesai" berarti audit
+  /// dikunci dan tidak bisa disunting lagi.
+  status String @default("draft")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  instansi      Instansi      @relation(fields: [instansiId], references: [id])
+  alatRadiologi AlatRadiologi @relation(fields: [alatRadiologiId], references: [id])
+  user          User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([instansiId])
+  @@index([alatRadiologiId])
+  @@index([periodeMulai])
 }
 
 /// Many-to-many laporan <-> registry alat ukur (PRD 6.1c).

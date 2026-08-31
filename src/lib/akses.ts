@@ -35,6 +35,16 @@ export function filterLaporan(user: Pengguna) {
   return { userId: user.id };
 }
 
+/**
+ * Filter daftar audit dosis milik sendiri.
+ *
+ * Kepemilikannya lewat `userId` seperti laporan, bukan `createdById` — audit
+ * dosis adalah pekerjaan Fismed, bukan data master yang dipakai bersama.
+ */
+export function filterAudit(user: Pengguna) {
+  return { userId: user.id };
+}
+
 /** Filter data master milik Fismed tertentu — hanya dipakai di halaman admin. */
 export function filterMilikPengguna(penggunaId: string) {
   return { createdById: penggunaId };

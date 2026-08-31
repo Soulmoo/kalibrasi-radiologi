@@ -8,6 +8,7 @@ import { keluar } from "@/app/actions/auth";
 const MENU = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/laporan", label: "Laporan" },
+  { href: "/audit-dosis", label: "Audit Dosis" },
   { href: "/instansi", label: "Instansi / Klien" },
   { href: "/alat", label: "Alat Radiologi" },
   { href: "/alat-ukur", label: "Registry Alat Ukur" },

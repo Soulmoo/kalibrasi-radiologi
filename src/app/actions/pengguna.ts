@@ -69,27 +69,38 @@ export async function hapusAkun(fd: FormData) {
     // Laporan milik akun ini beserta tautan alat ukurnya.
     await tx.laporan.deleteMany({ where: { userId: id } });
 
-    // Alat radiologi: yang masih dipakai laporan Fismed lain dialihkan,
-    // sisanya dihapus.
+    // Audit dosis milik akun ini. Sejajar laporan: isinya pekerjaan Fismed
+    // yang bersangkutan, jadi ikut terhapus bersama akunnya.
+    await tx.auditDosis.deleteMany({ where: { userId: id } });
+
+    // Alat radiologi: yang masih dipakai laporan ATAU audit dosis Fismed lain
+    // dialihkan, sisanya dihapus. Audit dosis wajib ikut dihitung di sini —
+    // tanpa itu, menghapus satu akun bisa menghapus alat yang masih dirujuk
+    // audit milik Fismed lain.
     const alat = await tx.alatRadiologi.findMany({
       where: { createdById: id },
-      select: { id: true, _count: { select: { laporan: true } } },
+      select: { id: true, _count: { select: { laporan: true, auditDosis: true } } },
     });
+    const alatDipakai = (a: (typeof alat)[number]) =>
+      a._count.laporan > 0 || a._count.auditDosis > 0;
     await tx.alatRadiologi.updateMany({
-      where: { id: { in: alat.filter((a) => a._count.laporan > 0).map((a) => a.id) } },
+      where: { id: { in: alat.filter(alatDipakai).map((a) => a.id) } },
       data: { createdById: user.id },
     });
     await tx.alatRadiologi.deleteMany({
-      where: { id: { in: alat.filter((a) => a._count.laporan === 0).map((a) => a.id) } },
+      where: { id: { in: alat.filter((a) => !alatDipakai(a)).map((a) => a.id) } },
     });
 
-    // Instansi: sama, cek sisa alat dan laporan yang menautnya.
+    // Instansi: sama, cek sisa alat, laporan, dan audit dosis yang menautnya.
     const instansi = await tx.instansi.findMany({
       where: { createdById: id },
-      select: { id: true, _count: { select: { laporan: true, alat: true } } },
+      select: {
+        id: true,
+        _count: { select: { laporan: true, alat: true, auditDosis: true } },
+      },
     });
     const masihDipakai = (i: (typeof instansi)[number]) =>
-      i._count.laporan > 0 || i._count.alat > 0;
+      i._count.laporan > 0 || i._count.alat > 0 || i._count.auditDosis > 0;
     await tx.instansi.updateMany({
       where: { id: { in: instansi.filter(masihDipakai).map((i) => i.id) } },
       data: { createdById: user.id },

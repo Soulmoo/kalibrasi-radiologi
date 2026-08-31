@@ -233,6 +233,158 @@ export function ghostingRatio(
   );
 }
 
+/* ---------------- Audit dosis pasien (TPDI / Si-INTAN) ---------------- */
+
+/**
+ * Median (persentil ke-50 / Q2) — inilah "nilai tipikal dosis" pada Pedoman
+ * Teknis TPDI butir 1.5.21: nilai dosis suatu fasilitas untuk satu jenis
+ * pemeriksaan dalam satu kelompok umur pada satu modalitas.
+ */
+export function median(values: unknown[]): Angka {
+  return persentil(values, 50);
+}
+
+/**
+ * Persentil dengan interpolasi linier antar dua data terdekat.
+ *
+ * Dipakai untuk Q3 = TPD Lokal (butir 1.5.20) dan Q3 dari sebaran nilai tipikal
+ * = TPD Nasional (butir 1.5.19).
+ *
+ * ASUMSI: pedoman menyebut "persentil ke-75" tanpa menetapkan metode
+ * interpolasinya, padahal hasilnya bisa berbeda antar metode pada sampel kecil.
+ * Di sini dipakai interpolasi linier pada posisi (n−1)·p/100 — metode yang sama
+ * dengan PERCENTILE.INC di Excel, yang paling lazim dipakai fasilitas saat
+ * menghitung manual. Kalau BAPETEN kelak menetapkan metode lain, hanya fungsi
+ * ini yang perlu diubah.
+ */
+export function persentil(values: unknown[], p: number): Angka {
+  const v = angkaValid(values).sort((a, b) => a - b);
+  if (v.length === 0) return null;
+  if (v.length === 1) return v[0];
+
+  const pos = ((v.length - 1) * p) / 100;
+  const bawah = Math.floor(pos);
+  const atas = Math.ceil(pos);
+  if (bawah === atas) return v[bawah];
+  return v[bawah] + (pos - bawah) * (v[atas] - v[bawah]);
+}
+
+/** Hasil regresi keluaran tabung terhadap tegangan: Y = a · kV^n. */
+export type RegresiKeluaran = { a: number; n: number; r2: number; titik: number };
+
+/**
+ * Regresi pangkat keluaran radiasi terhadap tegangan tabung, Y = a · kV^n.
+ *
+ * Dipakai untuk Jalur B audit dosis (Pedoman Teknis butir 3.2.4.1.2): kalau
+ * pesawat tidak punya indikator dosis, INAK diperkirakan dari data keluaran
+ * radiasi hasil uji kesesuaian. Karena kV klinis pasien jarang persis sama
+ * dengan kV yang diuji, keluaran pada kV klinis diperoleh lewat regresi ini.
+ *
+ * Bentuk pangkat dipilih mengikuti literatur Si-INTAN, yang melaporkan
+ * persamaan seperti Y = 2×10⁻⁷ · kV^2,6937. Regresinya dikerjakan sebagai
+ * kuadrat terkecil linier pada skala log-log: ln Y = ln a + n · ln kV.
+ *
+ * Butuh minimal dua titik dengan kV BERBEDA; titik dengan kV atau keluaran
+ * ≤ 0 dibuang karena logaritmanya tidak terdefinisi.
+ */
+export function regresiPangkat(
+  titik: Array<{ kv: Angka; y: Angka }>,
+): RegresiKeluaran | null {
+  const t = titik
+    .filter((p) => p.kv !== null && p.y !== null && p.kv > 0 && p.y > 0)
+    .map((p) => ({ x: Math.log(p.kv as number), y: Math.log(p.y as number) }));
+
+  if (t.length < 2) return null;
+  // Semua kV sama -> kemiringan tidak bisa ditentukan.
+  if (new Set(t.map((p) => p.x)).size < 2) return null;
+
+  const n = t.length;
+  const mx = t.reduce((a, p) => a + p.x, 0) / n;
+  const my = t.reduce((a, p) => a + p.y, 0) / n;
+
+  let sxy = 0;
+  let sxx = 0;
+  for (const p of t) {
+    sxy += (p.x - mx) * (p.y - my);
+    sxx += (p.x - mx) ** 2;
+  }
+  if (sxx === 0) return null;
+
+  const kemiringan = sxy / sxx;
+  const potong = my - kemiringan * mx;
+
+  let ssRes = 0;
+  let ssTot = 0;
+  for (const p of t) {
+    ssRes += (p.y - (potong + kemiringan * p.x)) ** 2;
+    ssTot += (p.y - my) ** 2;
+  }
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+
+  return { a: Math.exp(potong), n: kemiringan, r2, titik: n };
+}
+
+/** Keluaran tabung (mGy/mAs) pada tegangan tertentu menurut hasil regresi. */
+export function keluaranPadaKv(reg: RegresiKeluaran | null, kv: Angka): Angka {
+  if (!reg || kv === null || kv <= 0) return null;
+  const y = reg.a * kv ** reg.n;
+  return Number.isFinite(y) ? y : null;
+}
+
+/**
+ * INAK = Y(kV) × mAs × (jarakUkur / FSD)².
+ *
+ * `jarakUkur` adalah jarak saat keluaran radiasi diukur — Si-INTAN memakai
+ * 100 cm sebagai jarak baku. PERHATIAN: pembilangnya adalah jarak PENGUKURAN,
+ * bukan FDD klinis; keduanya sering berbeda (mis. output diukur pada 100 cm
+ * sementara Chest PA dieksposi pada 180 cm).
+ *
+ * Karena hubungannya kuadrat terbalik, galat FSD terkuadratkan: meleset 10 cm
+ * pada FSD 70 cm sudah menggeser INAK sekitar 25 %.
+ */
+export function hitungInak(
+  keluaran: Angka,
+  mas: Angka,
+  jarakUkur: Angka,
+  fsd: Angka,
+): Angka {
+  if (keluaran === null || mas === null || jarakUkur === null || fsd === null) return null;
+  if (fsd <= 0 || jarakUkur <= 0) return null;
+  return keluaran * mas * (jarakUkur / fsd) ** 2;
+}
+
+/**
+ * Faktor hamburan balik (Back Scatter Factor) untuk radiografi umum.
+ *
+ * Si-INTAN memakai nilai tetap 1,35: ESAK = 1,35 × INAK. Ini penyederhanaan
+ * resmi — BSF sebenarnya bergantung pada kualitas berkas (kVp, HVL), luas
+ * lapangan, dan ketebalan pasien, dengan rentang lazim 1,25–1,6. Nilai tetap
+ * dipakai supaya hasil antar fasilitas bisa dibandingkan.
+ *
+ * BSF selalu > 1: hamburan balik MENAMBAH kerma di permukaan kulit, sehingga
+ * ESAK selalu lebih besar dari INAK.
+ */
+export const BSF_RADIOGRAFI_UMUM = 1.35;
+
+/** Jarak baku pengukuran keluaran radiasi menurut definisi INAK di Si-INTAN. */
+export const JARAK_UKUR_BAKU_CM = 100;
+
+/** ESAK = INAK × BSF. */
+export function hitungEsak(inak: Angka, bsf: Angka = BSF_RADIOGRAFI_UMUM): Angka {
+  if (inak === null || bsf === null) return null;
+  return inak * bsf;
+}
+
+/**
+ * FSD diturunkan dari geometri: jarak fokus ke permukaan meja dikurangi tebal
+ * pasien. Dipakai kalau FSD tidak diukur langsung saat eksposi.
+ */
+export function fsdDariTebal(jarakFokusMeja: Angka, tebalPasien: Angka): Angka {
+  if (jarakFokusMeja === null || tebalPasien === null) return null;
+  const fsd = jarakFokusMeja - tebalPasien;
+  return fsd > 0 ? fsd : null;
+}
+
 /** Format angka untuk tampilan/PDF. Nilai null ditulis "-" seperti dokumen contoh. */
 export function fmt(v: Angka | undefined, desimal = DESIMAL_TAMPILAN): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "-";
