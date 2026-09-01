@@ -419,6 +419,11 @@ page, before anything can render. The two regions are a pair: move the database 
 value moves with it, and dropping the file re-introduces the latency with no other symptom.
 Region config in `vercel.json` overrides the project's dashboard setting.
 
+Keep that file to schema keys only. Vercel validates `vercel.json` strictly and **fails the
+build** on any extra property, so the usual `"//"` comment key is not available there — the
+reasoning has to live here instead. The failure surfaces only at deploy time; `next build`
+locally never looks at the file.
+
 Vercel's environment variables are a separate store from the gitignored `.env` — nothing in
 `.env` ever reaches production. Adding or changing one there does **not** affect running
 deployments either; it is injected at build time, so a redeploy is required.

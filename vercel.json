@@ -1,6 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-
-  "//": "Fungsi dijalankan di Singapura (sin1) supaya satu benua dengan database. Database Neon aplikasi ini ada di ap-southeast-1 (Singapura), sedangkan Vercel secara bawaan menjalankan fungsi di iad1 (Washington DC). Tanpa baris ini setiap query harus menyeberangi Pasifik bolak-balik — sekitar 200 ms sekali jalan — dan satu halaman melakukan beberapa query berurutan sebelum apa pun bisa digambar. Kalau suatu saat database dipindah ke region lain, ganti nilai ini agar tetap sepasang.",
   "regions": ["sin1"]
 }
