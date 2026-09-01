@@ -8,8 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Internal work tool for medical physicists (Fismed) calibrating radiology equipment: they
 enter raw measurements, the app calculates derived parameters and pass/fail verdicts, and
-exports a print-ready PDF report with a Fismed signature block. This produces internal
-working reports, not official BAPETEN/BPAFK-legal certificates. Implements
+exports a print-ready PDF report with a Fismed signature block. A second, smaller workflow
+(`/audit-dosis`) compares patient doses against the national diagnostic reference levels.
+This produces internal working reports, not official BAPETEN/BPAFK-legal certificates. Implements
 `PRD_Aplikasi_Kalibrasi_Radiologi.md` (v0.5) — most in-repo comments and docs cite specific
 PRD sections, so behavior that looks arbitrary usually isn't.
 
@@ -18,7 +19,9 @@ PRD sections, so behavior that looks arbitrary usually isn't.
 hunting for the file. The in-repo stand-ins are `README.md`'s "Validasi Rumus" section
 (per-modality comparison of every formula against the six BPAFK reference documents,
 including the parameters deliberately left un-calculated) and the doc comments on the
-functions themselves. If a decision hinges on what a PRD section actually says, ask.
+functions themselves. If a decision hinges on what a PRD section actually says, ask. The same
+goes for the `Pedoman Teknis butir N` citations in the dose-audit code (BAPETEN
+PRK/PD/01/00/2021) — external documents, quoted in the doc comments, not files to look for.
 
 The UI, code comments, and commit messages are in Indonesian. Match that when editing
 existing files.
@@ -90,7 +93,8 @@ documents and drift silently if duplicated.
 
 Runtime flow: `src/lib/evaluasi.ts` (`hitungBlok`, `rekapLaporan`, `draftKesimpulan`) takes
 a `Template` + stored `HasilUji` JSON and produces computed cell text + verdicts.
-`src/lib/calc.ts` holds every formula plus the BAPETEN HVL lookup table.
+`src/lib/calc.ts` holds every formula plus the BAPETEN HVL lookup table, and is shared with
+the dose-audit engine (median/percentile, tube-output regression, INAK/ESAK, FSD).
 `src/components/lembar.tsx` renders the computed result as the print-ready report, reused
 by both the on-screen preview and the `/laporan/[id]/cetak` PDF page.
 
@@ -107,6 +111,59 @@ the browser print dialog (destination "Save as PDF", A4, browser header/footer o
 was a deliberate choice to avoid needing Puppeteer/Chromium on serverless Vercel and to
 guarantee the PDF always matches the on-screen layout exactly.
 
+### Audit dosis pasien — a second engine, deliberately not a template
+
+`/audit-dosis` (`src/lib/audit-dosis.ts` + the TPDI tables in `src/lib/tpdi.ts`) compares a
+facility's typical patient dose against the national **TPDI/I-DRL** (Kepka BAPETEN
+1211/K/V/2021). It sits alongside the calibration reports and reuses their conventions —
+raw-strings-only JSON (`AuditDosis.dataPasien`), nothing computed persisted, `draft` →
+`selesai` one-way lock, three-layer access checks — but it is **not** a `Template` and must
+not be folded into `src/lib/templates/`. Its rows are patients, not test parameters, and its
+output is a per-group statistic, not a per-row verdict.
+
+The one rule that governs every design decision here: **TPD is an optimisation indicator, not
+a dose limit.** There is no `lolos`/`tidak-lolos` anywhere in this feature, and there must
+never be one — Pedoman Teknis 3.3.3–3.3.5 requires a review for *all three* situations,
+including doses *below* the national value (too low risks unusable images and repeat
+exposures). This is also why `rekap-audit.tsx` badges are amber/sky/slate rather than
+red/green: a traffic-light palette makes Fismed read two of the three situations as "fine".
+`AMBANG_HAMPIR_SAMA_PERSEN` (±10 %) is a reading aid invented for this app, not a regulatory
+threshold.
+
+Structure:
+- **Two paths** (`MetodeAudit`, Pedoman Teknis 3.2.4.1). *Jalur A* `"indikator"` reads the
+  dose the machine displays; *Jalur B* `"estimasi"` derives INAK from a power-law regression
+  of tube output (`regresiPangkat`/`keluaranPadaKv` in `calc.ts`) against exposure factors.
+  CT-Scan is always Jalur A — CTDIvol/DLP come off the console, there is no estimation path.
+- **Jalur B's source data is an existing report**, not a new measurement:
+  `titikKeluaranDariHasil()` reads the `akurasi-tegangan` block of a calibration report
+  (mAs from the block `meta`, kV from the *setting*, falling back to the measured reading).
+  The resulting regression is computed once in `buatAudit` and **frozen into
+  `AuditDosis.parameter`** — same reasoning as `konfigurasiSnapshot`: recalibrating the
+  machine later must not silently rewrite doses already audited.
+- **Grouping** is `jenisPemeriksaan` × `kelompokUmur` (`0-4` / `5-14` / `>=15`); rows missing
+  either are dropped rather than guessed. Typical value = median, local TPD = 75th
+  percentile, `MIN_PASIEN = 20` marks a group as under-sampled (it is still computed and
+  shown, just flagged).
+- **Coverage is narrower than the template registry on purpose.**
+  `modalitasAuditDariJenisAlat()` maps only `radiografi-mobile` → `radiografi-umum` and
+  `ct-scan`; gigi/fluoroskopi have TPDIs under other Kepkas but in different quantities
+  (DAP, total kerma) and would need their own tables *and* form columns. Only adults have
+  2021 TPDI values (`USIA_BER_TPDI`), so paediatric groups compute a typical value with no
+  national comparator — that is correct, not a missing lookup.
+- Patient-table columns live in `src/app/(app)/audit-dosis/[id]/kolom.ts` so the client form
+  and the server-rendered read-only/print views share one definition. Columns marked
+  `identitas: true` never reach the printed sheet.
+- `hapusIdentitasPasien` (locked audits only) blanks name/code/sex but **keeps age and
+  weight** — those drive the grouping, so erasing them would change numbers already frozen.
+- The printed audit sheet passes `gambar={null}` to `TandaTanganFismed`: there is no
+  signature snapshot column, because locking an audit is not an act of signing. Don't copy
+  `Laporan`'s signature requirement over to it.
+
+The 2021 TPDI numbers are under review by BAPETEN (a 2025 draft exists, unratified). If new
+values are issued, replace the tables and `SUMBER_TPDI` — that is following a new decision,
+not fixing a bug.
+
 ### Routing, auth gating, and cache invalidation
 
 **There is no `src/middleware.ts`.** Nothing guards routes centrally — `(app)/layout.tsx`
@@ -114,6 +171,19 @@ calls `requireUser()` (which `redirect`s to `/masuk`), and every page under it c
 `requireUser()`/`getUser()` again for its own data scoping. A new authenticated page must
 therefore live inside the `(app)` group *and* fetch the session itself; a route added
 outside that group is public by default, and no middleware will catch the mistake.
+
+That double read is why `requireUser()`/`getUser()` share one `cache()`-wrapped `auth()`
+in `src/lib/session.ts`. `auth()` is not a cheap cookie read — the `jwt` callback refreshes
+the profile and role from the database on every call — so without the dedupe each navigation
+paid two Neon round trips before touching its own data. React's `cache()` lasts one request
+only, so the layered guards are untouched; unwrapping it silently doubles every page's
+latency again.
+
+**Every route here is dynamic** (`ƒ` in `next build` output), because they all read the
+session. Next can therefore prefetch nothing on hover, and a click sits on a blank-looking
+page until the server finishes. `src/app/(app)/loading.tsx` is the answer: one skeleton at
+the root of the group, inherited by every child route that doesn't ship its own. Deleting it
+doesn't break anything measurable — the app just goes back to feeling like it hangs.
 
 This is Next.js 16 (React 19) — `params` and `searchParams` are `Promise`s and are awaited
 in every page here. Follow AGENTS.md and check `node_modules/next/dist/docs/` before
@@ -167,6 +237,9 @@ is the template key, `konfigurasi` is a per-modality JSON blob) → `Laporan` (r
 `hasilUji` JSON follows the owning template's schema, `konfigurasiSnapshot` freezes the
 equipment config at report time so later profile edits don't rewrite history). `AlatUkur`
 (measurement-instrument registry) relates to `Laporan` many-to-many via `LaporanAlatUkur`.
+`AuditDosis` hangs off the same `User`/`Instansi`/`AlatRadiologi` trio (owned via `userId`,
+like `Laporan`, not `createdById`), with `parameter` and `dataPasien` as its JSON columns and
+an optional `laporanSumberId` pointing at the report its tube-output regression came from.
 
 Several doc comments in `schema.prisma` predate the ownership model below and are now
 wrong — `Instansi` is *not* "shared lintas Fismed", and `peran` has three values, not two.
@@ -178,6 +251,14 @@ model, but never take it as spec.
 which swallows parse errors and falls back — a corrupt blob must degrade to an empty form,
 never crash a Fismed's report page — and write with `JSON.stringify`. Queries can't filter
 or index inside these; do it in TypeScript after parsing.
+
+Because those columns are large, **list pages must `select` the columns they render, never
+`include` a relation wholesale.** `hasilUji`, `konfigurasiSnapshot`, `konfigurasi`,
+`AuditDosis.dataPasien`, and `User.tandaTanganGambar` (a base64 PNG) are all invisible to a
+summary table but travel over the wire anyway — `/laporan` once pulled all of them for 100
+rows to print a nomor, an instansi, and a date. Prisma gives no warning and the page still
+renders correctly, so this only ever shows up as unexplained slowness. Detail pages, which
+actually need the blobs, are the exception.
 
 `User.tandaTanganGambar` holds the Fismed's signature as a PNG data URL, and
 `Laporan.tandaTanganSnapshot` freezes a copy of it the moment a report goes `selesai` — that
@@ -264,6 +345,13 @@ Use `terkunci()`/`STATUS_*` from `src/lib/laporan.ts` rather than comparing the 
 the values stay `"draft"`/`"selesai"` in the database, so renaming them would be a data
 migration for no gain.
 
+`AuditDosis.status` repeats the whole pattern with its own helpers
+(`terkunciAudit()`/`STATUS_*` in `src/lib/audit-dosis.ts`): same one-way transition, same
+"only master may delete a locked one", same fall-back-to-draft on an unrecognized value. The
+one difference is deliberate — locking an audit does **not** require a signature and stores
+no signature snapshot, because an audit sheet is a review document, not a signed measurement
+record. Locking it is instead what unlocks `hapusIdentitasPasien`.
+
 **Cross-Fismed access is read-only, by design.** Admin/master may open and print another
 Fismed's report but never edit it — report contents are that Fismed's personal
 measurements (instrument readings, ambient conditions at test time, field notes), so
@@ -290,11 +378,12 @@ Two easy-to-miss rules already handled correctly — don't regress them:
   the viewing user's, so already-recorded instruments aren't wiped on save.
 
 Deleting an account (`hapusAkun`, `src/app/actions/pengguna.ts`) is not a cascade. Inside
-one transaction it drops the account's own reports, then for each instansi / alat radiologi
-/ alat ukur checks whether another Fismed's report still references it: still-referenced
-rows are **reassigned to the deleting master**, only unreferenced ones are deleted. Foreign
-keys can't express that, so any new owned model needs its own branch here or account
-deletion starts breaking other people's reports.
+one transaction it drops the account's own reports *and* dose audits, then for each instansi
+/ alat radiologi / alat ukur checks whether another Fismed's report **or audit** still
+references it: still-referenced rows are **reassigned to the deleting master**, only
+unreferenced ones are deleted. Foreign keys can't express that, so any new owned model needs
+its own branch here *and* an extra `_count` in those reference checks, or account deletion
+starts breaking other people's data.
 
 This intentionally overrides the original PRD §4 assumption that master data is shared
 across all Fismed.
@@ -322,6 +411,13 @@ page that did nothing. Google-side failures come back through `pages.error` in
 anything else rethrows, for the same reason.
 
 ### Deploying, and the Google OAuth redirect URI
+
+**`vercel.json` pins functions to `sin1` so they sit beside the database.** The Neon
+instance is in `ap-southeast-1` (Singapore); Vercel's default is `iad1` (Washington DC),
+which puts a Pacific crossing — roughly 200 ms each way — on every query, several times per
+page, before anything can render. The two regions are a pair: move the database and this
+value moves with it, and dropping the file re-introduces the latency with no other symptom.
+Region config in `vercel.json` overrides the project's dashboard setting.
 
 Vercel's environment variables are a separate store from the gitignored `.env` — nothing in
 `.env` ever reaches production. Adding or changing one there does **not** affect running

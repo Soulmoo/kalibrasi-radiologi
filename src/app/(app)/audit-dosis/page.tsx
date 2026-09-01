@@ -21,10 +21,22 @@ export default async function HalamanAuditDosis({
   const where: Prisma.AuditDosisWhereInput = { ...filterAudit(user) };
   if (modalitas) where.modalitas = modalitas;
 
+  // Seperti daftar laporan: hanya kolom yang benar-benar digambar. `include`
+  // penuh akan menarik `dataPasien` (seluruh baris pasien satu audit) dan
+  // `parameter` untuk seratus audit sekaligus, tanpa ada yang menampilkannya.
   const daftar = await prisma.auditDosis.findMany({
     where,
     orderBy: { periodeMulai: "desc" },
-    include: { instansi: true, alatRadiologi: true },
+    select: {
+      id: true,
+      modalitas: true,
+      periodeMulai: true,
+      periodeSelesai: true,
+      metode: true,
+      status: true,
+      instansi: { select: { namaInstansi: true, namaFasilitas: true } },
+      alatRadiologi: { select: { namaAlat: true, model: true, lokasiUnit: true } },
+    },
     take: 100,
   });
 

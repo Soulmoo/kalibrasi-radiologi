@@ -33,10 +33,24 @@ export default async function HalamanLaporan({
     ];
   }
 
+  // Kolom yang diambil dibatasi persis sebanyak yang digambar tabel di bawah.
+  // Dengan `include` penuh, tiap baris ikut menyeret `hasilUji` dan
+  // `konfigurasiSnapshot` — JSON seluruh hasil pengukuran satu laporan — plus
+  // `user.tandaTanganGambar` yang berupa PNG data URL, seratus kali, padahal
+  // tidak satu pun dari ketiganya dipakai di daftar ini.
   const daftar = await prisma.laporan.findMany({
     where,
     orderBy: { tanggalUji: "desc" },
-    include: { instansi: true, alatRadiologi: true, user: true },
+    select: {
+      id: true,
+      nomorLaporan: true,
+      jenisAlat: true,
+      lokasiUji: true,
+      tanggalUji: true,
+      status: true,
+      instansi: { select: { namaInstansi: true, namaFasilitas: true } },
+      alatRadiologi: { select: { lokasiUnit: true } },
+    },
     take: 100,
   });
 

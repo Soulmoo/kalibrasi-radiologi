@@ -19,7 +19,20 @@ export default async function HalamanAlat({
     prisma.alatRadiologi.findMany({
       where: milik,
       orderBy: [{ instansi: { namaInstansi: "asc" } }, { jenisAlat: "asc" }],
-      include: { instansi: true, _count: { select: { laporan: true } } },
+      // Daftar ini tidak dibatasi `take`, jadi `konfigurasi` (JSON per
+      // modalitas) akan ikut terbawa untuk setiap alat yang pernah didaftarkan.
+      // Di sini yang dibutuhkan hanya identitas alatnya.
+      select: {
+        id: true,
+        namaAlat: true,
+        merk: true,
+        model: true,
+        jenisAlat: true,
+        lokasiUnit: true,
+        noSeri: true,
+        instansi: { select: { namaInstansi: true } },
+        _count: { select: { laporan: true } },
+      },
     }),
     prisma.instansi.count({ where: milik }),
   ]);
