@@ -54,7 +54,7 @@ export default async function Dashboard() {
         <div>
           <h1 className="text-lg font-semibold">Halo, {user.nama}</h1>
           <p className="text-sm text-[var(--muted)]">
-            Modalitas tersedia: {TEMPLATES.map((t) => t.nama).join(", ")}.
+           Semoga Harimu Menyenangkan! 
           </p>
         </div>
         <Link href="/laporan/baru" className="tombol tombol-utama">
