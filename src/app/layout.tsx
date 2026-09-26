@@ -8,9 +8,9 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Aplikasi Kalibrasi Alat Radiologi",
+  title: "Aplikasi Kalibrasi Alat Radiasi Medis",
   description:
-    "Alat bantu kalkulasi dan penulisan laporan hasil kalibrasi alat radiologi untuk fisikawan medis.",
+    "Alat bantu kalkulasi dan penulisan laporan hasil kalibrasi alat radiologi dan radioterapi untuk fisikawan medis.",
 };
 
 export default function RootLayout({

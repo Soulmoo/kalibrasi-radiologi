@@ -40,6 +40,7 @@ export function hitungBlok(blok: Blok, hasil: HasilUji): BlokTerhitung {
   const ctx: KonteksHitung = { meta: state.meta, rows: state.rows, all: hasil };
 
   const baris: BarisTerhitung[] = state.rows.map((r) => {
+    const def = blok.modeBaris === "tetap" ? blok.baris?.find((b) => b.key === r._key) : undefined;
     const sel: Record<string, string> = {};
     for (const k of blok.kolom) {
       if (k.jenis === "label") {
@@ -53,7 +54,9 @@ export function hitungBlok(blok: Blok, hasil: HasilUji): BlokTerhitung {
         }
       } else {
         const raw = (r[k.key] ?? "").trim();
-        sel[k.key] = raw === "" ? "-" : raw;
+        // Sel kosong memakai nilai otomatis baris ini (bila ada); isian Fismed selalu menang.
+        const isi = raw !== "" ? raw : (def?.otomatis?.[k.key]?.(ctx) ?? "").trim();
+        sel[k.key] = isi === "" ? "-" : isi;
       }
     }
     return {

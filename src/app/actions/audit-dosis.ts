@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { bolehLihat, bolehUbah } from "@/lib/akses";
 import {
   PESAN_AUDIT_TERKUNCI,
+  RUTE_AUDIT,
   STATUS_DRAF,
   STATUS_PERMANEN,
   type ParameterAudit,
@@ -130,8 +131,8 @@ export async function buatAudit(_prev: AksiState, fd: FormData): Promise<AksiSta
     },
   });
 
-  revalidatePath("/audit-dosis");
-  redirect(`/audit-dosis/${audit.id}`);
+  revalidatePath(RUTE_AUDIT);
+  redirect(`${RUTE_AUDIT}/${audit.id}`);
 }
 
 /**
@@ -185,10 +186,10 @@ export async function simpanAudit(_prev: AksiState, fd: FormData): Promise<AksiS
     },
   });
 
-  revalidatePath(`/audit-dosis/${id}`);
-  revalidatePath("/audit-dosis");
+  revalidatePath(`${RUTE_AUDIT}/${id}`);
+  revalidatePath(RUTE_AUDIT);
 
-  if (mintaPermanen) redirect(`/audit-dosis/${id}`);
+  if (mintaPermanen) redirect(`${RUTE_AUDIT}/${id}`);
   return { ok: true, tersimpanPada: new Date().toISOString() };
 }
 
@@ -204,14 +205,14 @@ export async function hapusAudit(fd: FormData) {
   const id = String(fd.get("id") ?? "");
 
   const ada = await prisma.auditDosis.findUnique({ where: { id } });
-  if (!ada) redirect("/audit-dosis");
+  if (!ada) redirect(RUTE_AUDIT);
 
   const bolehHapus = terkunciAudit(ada.status) ? user.master : bolehUbah(user, ada.userId);
-  if (!bolehHapus) redirect("/audit-dosis?error=terkunci");
+  if (!bolehHapus) redirect(`${RUTE_AUDIT}?error=terkunci`);
 
   await prisma.auditDosis.delete({ where: { id } });
-  revalidatePath("/audit-dosis");
-  redirect("/audit-dosis?ok=hapus");
+  revalidatePath(RUTE_AUDIT);
+  redirect(`${RUTE_AUDIT}?ok=hapus`);
 }
 
 /**
@@ -230,9 +231,9 @@ export async function hapusIdentitasPasien(fd: FormData) {
   const id = String(fd.get("id") ?? "");
 
   const audit = await prisma.auditDosis.findUnique({ where: { id } });
-  if (!audit) redirect("/audit-dosis");
-  if (!bolehUbah(user, audit.userId)) redirect(`/audit-dosis/${id}?error=bukan-milik`);
-  if (!terkunciAudit(audit.status)) redirect(`/audit-dosis/${id}?error=belum-permanen`);
+  if (!audit) redirect(RUTE_AUDIT);
+  if (!bolehUbah(user, audit.userId)) redirect(`${RUTE_AUDIT}/${id}?error=bukan-milik`);
+  if (!terkunciAudit(audit.status)) redirect(`${RUTE_AUDIT}/${id}?error=belum-permanen`);
 
   const rows = parseJson<Array<Record<string, string>>>(audit.dataPasien, []);
   const bersih = rows.map((r) => ({ ...r, kodePasien: "", nama: "", jenisKelamin: "" }));
@@ -242,6 +243,6 @@ export async function hapusIdentitasPasien(fd: FormData) {
     data: { dataPasien: JSON.stringify(bersih) },
   });
 
-  revalidatePath(`/audit-dosis/${id}`);
-  redirect(`/audit-dosis/${id}?ok=identitas-dihapus`);
+  revalidatePath(`${RUTE_AUDIT}/${id}`);
+  redirect(`${RUTE_AUDIT}/${id}?ok=identitas-dihapus`);
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { bolehUbah, filterMilikPengguna } from "@/lib/akses";
+import { bidangDariForm, rute } from "@/lib/bidang";
 import {
   PESAN_BUTUH_TTD,
   PESAN_TERKUNCI,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/laporan";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
-import { getTemplate } from "@/lib/templates";
+import { bidangDariJenisAlat, getTemplate } from "@/lib/templates";
 
 export type AksiState = { error?: string; ok?: boolean; tersimpanPada?: string };
 
@@ -67,8 +68,9 @@ export async function buatLaporan(_prev: AksiState, fd: FormData): Promise<AksiS
     },
   });
 
-  revalidatePath("/laporan");
-  redirect(`/laporan/${laporan.id}`);
+  revalidatePath(rute(template.bidang, "/laporan"));
+  revalidatePath("/dashboard");
+  redirect(rute(template.bidang, `/laporan/${laporan.id}`));
 }
 
 export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<AksiState> {
@@ -172,14 +174,16 @@ export async function simpanLaporan(_prev: AksiState, fd: FormData): Promise<Aks
     }),
   ]);
 
-  revalidatePath(`/laporan/${id}`);
-  revalidatePath("/laporan");
+  const bidang = bidangDariJenisAlat(laporan.jenisAlat);
+  revalidatePath(rute(bidang, `/laporan/${id}`));
+  revalidatePath(rute(bidang, "/laporan"));
+  revalidatePath("/dashboard");
 
   // Menyimpan draf sengaja TIDAK berpindah halaman — form laporan panjang, dan
   // Fismed biasanya menyimpan berkali-kali sambil terus mengisi. Menyimpan
   // permanen sebaliknya: halamannya harus berganti ke tampilan terkunci, jadi
   // di jalur itu redirect dipakai supaya tidak bergantung pada revalidate saja.
-  if (mintaPermanen) redirect(`/laporan/${id}`);
+  if (mintaPermanen) redirect(rute(bidang, `/laporan/${id}`));
   return { ok: true, tersimpanPada: new Date().toISOString() };
 }
 
@@ -196,14 +200,16 @@ export async function hapusLaporan(fd: FormData) {
   const id = String(fd.get("id") ?? "");
 
   const ada = await prisma.laporan.findUnique({ where: { id } });
-  if (!ada) redirect("/laporan");
+  if (!ada) redirect(rute(bidangDariForm(fd), "/laporan"));
+  const daftar = rute(bidangDariJenisAlat(ada.jenisAlat), "/laporan");
 
   const bolehHapus = terkunci(ada.status)
     ? user.master
     : bolehUbah(user, ada.userId);
-  if (!bolehHapus) redirect(`/laporan?error=terkunci`);
+  if (!bolehHapus) redirect(`${daftar}?error=terkunci`);
 
   await prisma.laporan.delete({ where: { id } });
-  revalidatePath("/laporan");
-  redirect("/laporan");
+  revalidatePath(daftar);
+  revalidatePath("/dashboard");
+  redirect(daftar);
 }

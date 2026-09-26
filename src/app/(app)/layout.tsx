@@ -21,7 +21,7 @@ export default async function LayoutAplikasi({
 
           <Link href="/dashboard" className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-[var(--brand)]">
-              Kalibrasi Alat Radiologi
+              Kalibrasi Alat Radiasi Medis
             </span>
             <span className="hidden truncate text-xs text-[var(--muted)] sm:block">
               Alat bantu kalkulasi &amp; penulisan laporan

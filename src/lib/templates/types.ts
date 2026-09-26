@@ -1,3 +1,4 @@
+import type { KunciBidang } from "@/lib/bidang";
 import type { Angka } from "@/lib/calc";
 
 /**
@@ -70,6 +71,22 @@ export type DefinisiBaris = {
   label?: string;
   /** nilai awal per kolom */
   awal?: Record<string, SelValue>;
+  /**
+   * Pilihan tetap untuk sel isian baris ini — form merendernya sebagai
+   * dropdown, bukan kotak teks. Yang tersimpan tetap teks pilihannya apa
+   * adanya, jadi mengganti teks sebuah opsi = migrasi data (seperti key).
+   * Hanya untuk modeBaris "tetap".
+   */
+  opsi?: string[];
+  /** placeholder sel isian baris ini (mengalahkan placeholder kolomnya) */
+  placeholder?: string;
+  /**
+   * Nilai otomatis per kolom isian, dipakai selama sel itu DIKOSONGKAN Fismed
+   * (mis. bahan dinding chamber dari model yang dipilih). Dihitung ulang tiap
+   * render dan tidak pernah tersimpan — begitu Fismed mengetik, isiannya yang
+   * menang. Kembalikan "" kalau tidak ada nilai otomatis.
+   */
+  otomatis?: Record<string, (ctx: KonteksHitung) => string>;
 };
 
 /** Hasil hitung tingkat blok (mis. CL & CV yang dihitung dari seluruh baris). */
@@ -131,6 +148,8 @@ export type KonfGrup = {
 
 export type Template = {
   key: string;
+  /** tab utama tempat template ini muncul — lihat src/lib/bidang.ts */
+  bidang: KunciBidang;
   /** nama pendek untuk menu */
   nama: string;
   /** judul di halaman hasil pengujian, mis. "PESAWAT SINAR-X CT-SCAN" */

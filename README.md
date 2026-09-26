@@ -41,10 +41,13 @@ Langkah lengkap dari nol sampai online ada di
 
 ## Isi data contoh
 
-`npm run db:seed` mengisi satu instansi (RS Premier Surabaya), lima belas alat ukur, dan
-**enam laporan lengkap** yang angkanya diambil langsung dari keenam dokumen BPAFK
-referensi. Gunanya untuk membandingkan hasil hitung sistem dengan angka di dokumen asli —
-lihat bagian Validasi Rumus di bawah.
+`npm run db:seed` mengisi satu instansi (RS Premier Surabaya), dua puluh alat ukur (lima
+belas radiologi — satu di antaranya umum — dan lima radioterapi), serta **tujuh laporan
+lengkap**: enam laporan radiologi yang angkanya diambil langsung dari keenam dokumen BPAFK
+referensi, dan satu laporan LINAC 6 MV yang isiannya diambil dari spreadsheet IAEA
+TRS-398 (`Absolut 6 MV TRS-398.xlsm`). Gunanya untuk membandingkan hasil hitung sistem
+dengan angka di dokumen asli — lihat bagian Validasi Rumus dan Radioterapi di bawah.
+Seluruh laporan contoh berstatus Selesai, jadi bisa langsung dicetak ke PDF.
 
 ## Cakupan versi ini
 
@@ -61,6 +64,17 @@ Seluruh modalitas MVP di PRD 5.1 sudah tercakup:
 
 USG masih ditunda sampai parameter ujinya tersedia dari BPAFK (PRD 5.1).
 
+Di luar PRD, aplikasi juga mencakup **radioterapi**:
+
+| Alat | Metode | Acuan |
+|---|---|---|
+| LINAC — dosimetri berkas foton (1 laporan = 1 energi) | IAEA TRS-398 Rev.1 (2024) Bagian 6 | worksheet §6.9, spreadsheet IAEA v1.06 |
+
+Kedua bidang dipisah menjadi tab utama sendiri — **Dashboard | Radiologi | Radioterapi** —
+masing-masing dengan sub-tab laporan, instansi, alat, dan registry alat ukurnya. Audit dosis
+hanya ada di Radiologi. Menambah bidang baru (mis. Kedokteran Nuklir) = satu entri di
+`src/lib/bidang.ts` plus template-templatenya.
+
 **Radiografi Mobile dan C-Arm diperlakukan sebagai kalibrasi**, bukan uji kesesuaian.
 Parameter ujinya sama seperti dokumen uji kesesuaian aslinya, tetapi judul, tujuan, dan
 seluruh label dokumen memakai istilah kalibrasi. Tidak ada jenis dokumen "Uji Kesesuaian"
@@ -72,11 +86,14 @@ di aplikasi ini (PRD 5.2).
 prisma/schema.prisma        model data (User, Instansi, AlatRadiologi, AlatUkur, Laporan)
 prisma/seed.ts              data contoh dari dokumen referensi
 src/auth.ts                 Auth.js v5 — credentials (email + kata sandi), sesi JWT
+src/lib/bidang.ts           registry bidang (tab utama) + helper rute /[bidang]/...
 src/lib/calc.ts             seluruh rumus kalkulasi + tabel HVL BAPETEN
+src/lib/trs398.ts           rumus & tabel IAEA TRS-398 Rev.1 (dosimetri foton radioterapi)
 src/lib/evaluasi.ts         menjalankan template atas data → nilai terhitung + verdict
 src/lib/templates/          satu file per modalitas + tipe skema template
 src/components/lembar.tsx   komponen render laporan siap cetak
 src/app/(app)/              halaman aplikasi (butuh login)
+src/app/(app)/[bidang]/     laporan, instansi, alat, alat ukur, audit dosis per bidang
 ```
 
 ### Menambah modalitas baru
@@ -197,6 +214,50 @@ monitor) tidak ada di dokumen C-Arm referensi tetapi tercantum di PRD 6.2. Blok-
 tersedia di form dengan batas lolos uji yang diisi manual, dan **tidak ikut tercetak di
 PDF kalau dibiarkan kosong** — jadi laporan tetap identik dengan dokumen sumber bila
 parameter itu tidak diuji.
+
+## Radioterapi — dosimetri berkas foton (TRS-398 Rev.1)
+
+Template `linac-foton` (`src/lib/templates/linac-foton.ts`, rumus di `src/lib/trs398.ts`)
+menentukan dosis serap air di kondisi acuan untuk satu energi foton, mengikuti worksheet
+§6.9 TRS-398 Rev.1: M₁ = M/MU → M_Q = M₁·k_TP·k_elec·k_pol·k_s·k_vol →
+D_w(z_ref) = M_Q·N_D,w·k_Q → D_w(z_max) = 100·D_w/PDD (SSD) atau D_w/TMR (SAD).
+
+**Perbedaan yang disengaja terhadap spreadsheet IAEA v1.06 (edisi 2000):**
+
+| Aspek | Spreadsheet (2000) | Aplikasi (Rev.1, 2024) |
+|---|---|---|
+| k_Q | interpolasi tabel 6.III, 53 chamber | Eq. (34) dengan a, b Tabel 45, 26 chamber; chamber lain → k_Q manual |
+| k_TP | 273,2 | 273,15; T = suhu air phantom (§4.4.3.1) |
+| k_s | Tabel 4.VII, V₁/V₂ 2–10 | Tabel 10, V₁/V₂ 2–5; di luar itu Eq. (14) |
+| k_vol (FFF) | — | Eq. (22), panjang rongga dari Tabel 4 atau diisi |
+| Ketidakpastian D_w | 1,5 % | 1,0 % (k = 1, Tabel 17) |
+
+**Hasil pengecekan** dengan isian xlsm (lihat laporan contoh di seed):
+
+| Besaran | Sistem | Spreadsheet |
+|---|---|---|
+| M₁ | 0.121935 rdg/MU | 0.121935 |
+| k_TP | 1.08644 | 1.08644 |
+| k_pol | 1.000267 | 1.000267 |
+| k_s | 1.00226 | 1.00227 (Rev.1 membulatkan a₁ ke −0.875) |
+| k_Q PTW 30013 @ TPR 0,60 | 0.99753 (Rev.1) | 0.99833 (tabel 2000) |
+
+k_Q Eq. (34) cocok dengan Tabel 16 Rev.1 sampai 4 desimal (dicek pada 8 sel lintas
+chamber); sesekali berselisih 0,0001 karena Tabel 16 tampaknya dihitung dari konstanta
+yang belum dibulatkan. Tabel 11 (k_vol) sedikit lebih tinggi daripada Eq. (22) pada
+"SDD = 110 cm" — seluruh isinya justru cocok dengan SDD ≈ 105 cm; aplikasi memakai
+persamaannya dengan SDD dari set-up.
+
+**Deviasi keluaran** ditulis `e = (D(z_max) − acuan)/acuan × 100 %`, konvensi yang sama
+dengan radiologi. Sel `E95` di spreadsheet memakai `(1 − D)·100`, jadi tandanya terbalik.
+
+**Batas lolos keluaran diisi Fismed per laporan** — TRS-398 tidak menetapkan toleransi
+keluaran, hanya ketidakpastian D_w ≈ 1,0 % (k = 1), atau ≈ 2 % pada k = 2. Bahan
+pertimbangan: ±2 % setara ketidakpastian TRS-398 pada k = 2 (juga batas bulanan AAPM
+TG-142), ±3 % batas tindakan yang lebih longgar, ±1 % lebih ketat dari ketidakpastian
+pengukurannya sendiri. Batas kosong → "Tidak dilakukan", bukan Lolos. Pemeriksaan chamber
+Tabel 3 (efek polaritas < 0,4 %, k_s ≤ 1,05, konsistensi Eq. 13/14) hanya ditampilkan
+sebagai catatan, tanpa verdict.
 
 ## Deploy ke Vercel
 

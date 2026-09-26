@@ -46,7 +46,7 @@ export default async function HalamanMasuk({
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <h1 className="text-xl font-semibold text-[var(--brand)]">
-            Aplikasi Kalibrasi Alat Radiologi
+            Aplikasi Kalibrasi Alat Radiasi Medis
           </h1>
           <p className="mt-1 text-sm text-[var(--muted)]">
             Alat bantu kalkulasi &amp; penulisan laporan hasil kalibrasi

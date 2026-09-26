@@ -46,6 +46,7 @@ function selisihLapangan(b: Baris): Angka {
 
 export const radiografiMobile: Template = {
   key: "radiografi-mobile",
+  bidang: "radiologi",
   nama: "Radiografi Mobile / Umum",
   namaAlat: "Pesawat Sinar-X Radiografi Mobile",
   judulLaporan: "PESAWAT SINAR-X RADIOGRAFI MOBILE",

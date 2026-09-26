@@ -30,6 +30,7 @@ const BARIS_MODE = [
 
 export const mri: Template = {
   key: "mri",
+  bidang: "radiologi",
   nama: "MRI",
   namaAlat: "Magnetic Resonance Imaging (MRI)",
   judulLaporan: "MAGNETIC RESONANCE IMAGING (MRI)",

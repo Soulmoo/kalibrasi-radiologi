@@ -20,6 +20,7 @@ const lolosJika = (ok: boolean | null): Verdict =>
 
 export const ctScan: Template = {
   key: "ct-scan",
+  bidang: "radiologi",
   nama: "CT-Scan",
   namaAlat: "Pesawat Sinar-X CT-Scan",
   judulLaporan: "PESAWAT SINAR-X CT-SCAN",

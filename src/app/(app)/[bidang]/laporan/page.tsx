@@ -1,0 +1,178 @@
+import Link from "next/link";
+import { JudulHalaman, KosongPesan, TabelGulir } from "@/components/field";
+import { filterLaporan } from "@/lib/akses";
+import { tanggalPanjang } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
+import { requireUser } from "@/lib/session";
+import { pastikanBidang, rute } from "@/lib/bidang";
+import { jenisAlatBidang, namaJenisAlat, templatesBidang } from "@/lib/templates";
+import type { Prisma } from "@prisma/client";
+
+export default async function HalamanLaporan({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ bidang: string }>;
+  searchParams: Promise<{ q?: string; jenis?: string; error?: string }>;
+}) {
+  const user = await requireUser();
+  const bidang = pastikanBidang((await params).bidang);
+  const { q, jenis, error } = await searchParams;
+  const jenisBidang = jenisAlatBidang(bidang.key);
+
+  // Daftar ini selalu berisi laporan milik sendiri saja. Laporan Fismed lain
+  // diakses admin lewat Profil → Fismed.
+  const where: Prisma.LaporanWhereInput = {
+    ...filterLaporan(user),
+    // Filter jenis dari URL hanya dipakai kalau memang milik bidang ini, jadi
+    // laporan bidang lain tidak bisa ikut tampil lewat ?jenis=.
+    jenisAlat: jenis && jenisBidang.includes(jenis) ? jenis : { in: jenisBidang },
+  };
+  if (q) {
+    // mode "insensitive" hanya didukung Postgres — pencarian jadi tidak
+    // membedakan huruf besar/kecil.
+    const cari = { contains: q, mode: "insensitive" } as const;
+    where.OR = [
+      { nomorLaporan: cari },
+      { lokasiUji: cari },
+      { instansi: { namaInstansi: cari } },
+      { instansi: { namaFasilitas: cari } },
+      { alatRadiologi: { namaAlat: cari } },
+      { alatRadiologi: { noSeri: cari } },
+    ];
+  }
+
+  // Kolom yang diambil dibatasi persis sebanyak yang digambar tabel di bawah.
+  // Dengan `include` penuh, tiap baris ikut menyeret `hasilUji` dan
+  // `konfigurasiSnapshot` — JSON seluruh hasil pengukuran satu laporan — plus
+  // `user.tandaTanganGambar` yang berupa PNG data URL, seratus kali, padahal
+  // tidak satu pun dari ketiganya dipakai di daftar ini.
+  const daftar = await prisma.laporan.findMany({
+    where,
+    orderBy: { tanggalUji: "desc" },
+    select: {
+      id: true,
+      nomorLaporan: true,
+      jenisAlat: true,
+      lokasiUji: true,
+      tanggalUji: true,
+      status: true,
+      instansi: { select: { namaInstansi: true, namaFasilitas: true } },
+      alatRadiologi: { select: { lokasiUnit: true } },
+    },
+    take: 100,
+  });
+
+  return (
+    <div>
+      <JudulHalaman
+        judul={`Riwayat Laporan ${bidang.nama}`}
+        keterangan="Cari berdasarkan klien, nomor laporan, jenis alat, atau nomor seri."
+        aksi={
+          <Link href={rute(bidang.key, "/laporan/baru")} className="tombol tombol-utama">
+            + Laporan Baru
+          </Link>
+        }
+      />
+
+      {error === "terkunci" && (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Laporan yang sudah disimpan permanen tidak dapat dihapus. Hubungi master bila
+          benar-benar perlu dihapus.
+        </p>
+      )}
+
+      <form className="kartu mb-4 flex flex-wrap items-end gap-3 p-4">
+        <label className="min-w-56 flex-1">
+          <span className="mb-1 block text-sm font-medium">Kata kunci</span>
+          <input
+            name="q"
+            defaultValue={q ?? ""}
+            placeholder="Nama instansi, nomor laporan, no. seri…"
+            className="input-dasar"
+          />
+        </label>
+        <label>
+          <span className="mb-1 block text-sm font-medium">Jenis alat</span>
+          <select name="jenis" defaultValue={jenis ?? ""} className="input-dasar">
+            <option value="">Semua</option>
+            {templatesBidang(bidang.key).map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.nama}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="tombol tombol-sekunder">
+          Cari
+        </button>
+        {(q || jenis) && (
+          <Link href={rute(bidang.key, "/laporan")} className="tombol tombol-sekunder">
+            Reset
+          </Link>
+        )}
+      </form>
+
+      <div className="kartu overflow-hidden">
+        {daftar.length === 0 ? (
+          <KosongPesan>Tidak ada laporan yang cocok.</KosongPesan>
+        ) : (
+          <TabelGulir>
+            <table className="tabel-data">
+              <thead>
+                <tr>
+                  <th>Nomor Laporan</th>
+                  <th>Instansi</th>
+                  <th>Jenis Alat</th>
+                  <th>Lokasi Unit</th>
+                  <th>Tanggal Uji</th>
+                  <th>Status</th>
+                  <th className="w-40"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {daftar.map((l) => (
+                  <tr key={l.id}>
+                    <td className="font-medium">{l.nomorLaporan || "(tanpa nomor)"}</td>
+                    <td>
+                      <span className="block">{l.instansi.namaInstansi}</span>
+                      {l.instansi.namaFasilitas && (
+                        <span className="text-xs text-[var(--muted)]">
+                          {l.instansi.namaFasilitas}
+                        </span>
+                      )}
+                    </td>
+                    <td>{namaJenisAlat(l.jenisAlat)}</td>
+                    <td>{l.lokasiUji ?? l.alatRadiologi.lokasiUnit ?? "-"}</td>
+                    <td>{tanggalPanjang(l.tanggalUji)}</td>
+                    <td>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          l.status === "selesai"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {l.status === "selesai" ? "Selesai" : "Draf"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex justify-end gap-2">
+                        <Link href={rute(bidang.key, `/laporan/${l.id}`)} className="tombol tombol-sekunder">
+                          Buka
+                        </Link>
+                        <Link href={rute(bidang.key, `/laporan/${l.id}/cetak`)} className="tombol tombol-sekunder">
+                          PDF
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </TabelGulir>
+        )}
+      </div>
+    </div>
+  );
+}

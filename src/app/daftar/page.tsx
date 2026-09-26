@@ -15,7 +15,7 @@ export default async function HalamanDaftar() {
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <h1 className="text-xl font-semibold text-[var(--brand)]">
-            Aplikasi Kalibrasi Alat Radiologi
+            Aplikasi Kalibrasi Alat Radiasi Medis
           </h1>
         </div>
 

@@ -176,6 +176,7 @@ function seksiTambahanCArm(): Seksi {
 
 export const cArm: Template = {
   key: "c-arm",
+  bidang: "radiologi",
   nama: "C-Arm",
   namaAlat: "Pesawat Sinar-X C-Arm",
   judulLaporan: "PESAWAT SINAR-X C-ARM",

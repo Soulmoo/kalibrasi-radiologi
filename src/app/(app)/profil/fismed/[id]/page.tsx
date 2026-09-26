@@ -6,7 +6,8 @@ import { tanggalPanjang } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { emailMaster, labelPeran } from "@/lib/peran";
-import { namaJenisAlat } from "@/lib/templates";
+import { rute } from "@/lib/bidang";
+import { bidangDariJenisAlat, namaJenisAlat } from "@/lib/templates";
 
 export default async function LaporanFismed({
   params,
@@ -102,11 +103,14 @@ export default async function LaporanFismed({
                     </td>
                     <td>
                       <div className="flex justify-end gap-2">
-                        <Link href={`/laporan/${l.id}`} className="tombol tombol-sekunder">
+                        <Link
+                          href={rute(bidangDariJenisAlat(l.jenisAlat), `/laporan/${l.id}`)}
+                          className="tombol tombol-sekunder"
+                        >
                           Buka
                         </Link>
                         <Link
-                          href={`/laporan/${l.id}/cetak`}
+                          href={rute(bidangDariJenisAlat(l.jenisAlat), `/laporan/${l.id}/cetak`)}
                           className="tombol tombol-sekunder"
                         >
                           PDF

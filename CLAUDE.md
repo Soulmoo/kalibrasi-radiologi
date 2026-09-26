@@ -6,10 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Internal work tool for medical physicists (Fismed) calibrating radiology equipment: they
-enter raw measurements, the app calculates derived parameters and pass/fail verdicts, and
-exports a print-ready PDF report with a Fismed signature block. A second, smaller workflow
-(`/audit-dosis`) compares patient doses against the national diagnostic reference levels.
+Internal work tool for medical physicists (Fismed) calibrating radiology and radiotherapy
+equipment: they enter raw measurements, the app calculates derived parameters and pass/fail
+verdicts, and exports a print-ready PDF report with a Fismed signature block. A second,
+smaller workflow (`/radiologi/audit-dosis`) compares patient doses against the national
+diagnostic reference levels. Radiotherapy (currently LINAC photon dosimetry per IAEA
+TRS-398 Rev.1) is outside the PRD — it was added later and is documented in README.md's
+"Radioterapi" section and in `src/lib/trs398.ts`.
 This produces internal working reports, not official BAPETEN/BPAFK-legal certificates. Implements
 `PRD_Aplikasi_Kalibrasi_Radiologi.md` (v0.5) — most in-repo comments and docs cite specific
 PRD sections, so behavior that looks arbitrary usually isn't.
@@ -34,7 +37,7 @@ npm run build             # production build
 npm run lint               # eslint
 npx tsc --noEmit          # typecheck (no dedicated script — use directly)
 
-npx prisma migrate dev --name <nama>   # create + apply a migration (local)
+npx prisma migrate dev --name <nama>   # create + apply a migration (local; = npm run db:migrate -- --name <nama>)
 npm run db:push                          # push schema without a migration (prototyping)
 npm run db:seed                          # seed one instansi, 15 alat ukur, 6 full laporan
 npm run db:studio                        # Prisma Studio
@@ -46,12 +49,20 @@ deploy` manually against production, it happens automatically at build time.
 
 Requires Postgres (Neon or Vercel Storage) for both local and prod — see `.env.example`
 for `DATABASE_URL`, `AUTH_SECRET`, `MASTER_EMAILS`, and the optional
-`AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`.
+`AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`. The app started on SQLite (`dev.db`) and moved to
+Postgres for Vercel; `PANDUAN_DEPLOY_VERCEL.md` is the user-facing step-by-step deploy
+guide (in Indonesian) and still narrates that switch — it is history, not a supported
+local setup. `postinstall` runs `prisma generate`, so a fresh `npm install` already has
+the client.
 
 Run only **one** dev server at a time. Two of them share the same `.next` directory and
 corrupt each other's generated types; the symptom is `tsc` failing inside
 `.next/dev/types/routes.d.ts` with syntax errors that have nothing to do with your code.
-`rm -rf .next` fixes it. Same cause if the IDE flags a Prisma field that `tsc` accepts —
+`rm -rf .next` fixes it. The same cleanup is needed after moving or renaming route folders
+while a dev server runs (or running `next build` next to one): Turbopack panics with
+`Failed to write app endpoint /<old path>/page`, and each panic makes HMR reload the open
+page, so it looks like the page refreshing itself endlessly. Stop the server, delete
+`.next`, restart. Same cause if the IDE flags a Prisma field that `tsc` accepts —
 there, restart the TS server, since VS Code doesn't watch `node_modules` for the
 regenerated client after a schema change.
 
@@ -64,8 +75,10 @@ schema object in `src/lib/templates/<modalitas>.ts`, typed by `src/lib/templates
 The form UI, auto-calculation, pass/fail evaluation, and PDF layout are all generated from
 that schema — there is no per-modality form component or PDF page to write. To add a
 modality: create the template file following `ct-scan.ts`'s shape, then register it in
-`src/lib/templates/index.ts`. That registry is the full MVP set; USG is deliberately
-deferred until BPAFK publishes its test parameters.
+`src/lib/templates/index.ts`. The radiology entries are the full PRD MVP set (USG is
+deliberately deferred until BPAFK publishes its test parameters); `linac-foton` is the one
+radiotherapy template. Every template carries a `bidang` (`"radiologi"`/`"radioterapi"`)
+that decides which main tab it lives under — see Routing below.
 
 Key schema concepts (`types.ts`):
 - `Template.seksi[].blok[]` — a report is sections of blocks (tables).
@@ -82,6 +95,13 @@ Key schema concepts (`types.ts`):
   displayed verbatim, never rounded.
 - `Kolom.hanyaForm` — helper column, form-only, excluded from the printed PDF.
 - `Blok.opsional` — auxiliary block hidden from the PDF when every cell is empty.
+- `DefinisiBaris.opsi` — a fixed row whose input cell is a dropdown instead of a text box
+  (used heavily by `linac-foton`). The chosen text is stored verbatim, so renaming an
+  option string orphans saved data exactly like renaming a key.
+- `DefinisiBaris.otomatis` — per-column fallback value for an input cell the Fismed left
+  empty (e.g. chamber wall material from the selected model, like the IAEA spreadsheet's
+  VLOOKUP). Applied in `hitungBlok`, so form hint, read-only view and print all agree;
+  never persisted, and anything typed overrides it.
 
 Angiography and C-arm share report structure: the common parts live in
 `src/lib/templates/fluoroskopi.ts` and both templates call into it; C-arm adds its own
@@ -96,16 +116,28 @@ a `Template` + stored `HasilUji` JSON and produces computed cell text + verdicts
 `src/lib/calc.ts` holds every formula plus the BAPETEN HVL lookup table, and is shared with
 the dose-audit engine (median/percentile, tube-output regression, INAK/ESAK, FSD).
 `src/components/lembar.tsx` renders the computed result as the print-ready report, reused
-by both the on-screen preview and the `/laporan/[id]/cetak` PDF page.
+by both the on-screen preview and the `/[bidang]/laporan/[id]/cetak` PDF page.
 
-The report form (`/laporan/[id]/form.tsx`) is one client component that holds the entire
+The report form (`[bidang]/laporan/[id]/form.tsx`) is one client component that holds the entire
 `hasilUji` object in a single `useState` and re-runs `rekapLaporan()` in a `useMemo` on
 every keystroke — that is the live verdict preview. There is no per-cell or per-block save
 endpoint: the whole object goes to `simpanLaporan` as one JSON string field. Keep it that
 way; splitting the state or saving incrementally would mean recomputing on the server for
 each cell, and derived values are explicitly never persisted.
 
-PDF export has no headless-browser dependency: `/laporan/[id]/cetak` renders the report
+`linac-foton` bends the pattern rather than breaking it: TRS-398 is a single calculation
+chain, not a table of parameters, so its input blocks are two-column `Parameter | Nilai`
+tables of fixed rows, and its result blocks use `hitungTeks` columns that switch on
+`baris._key` and all call `hitungTrs398(ctx.all)` to re-run the whole chain. Its only
+verdict is the output deviation in `rt-keluaran`'s `ringkasanBlok`, against a limit the
+Fismed types in (TRS-398 sets none — never hard-code one). Chamber checks from TRS-398
+Table 3 are shown without a verdict on purpose, so a bad chamber doesn't mark the LINAC
+"Tidak Laik Pakai". Formulas and the chamber table come from TRS-398 **Rev.1 (2024)**, not
+the 2000 edition the IAEA spreadsheet uses; k_Q in particular is Eq. (34) from a/b
+constants, not table interpolation. Replacing them for a new edition is following a new
+standard, not fixing a bug — same as the TPDI tables.
+
+PDF export has no headless-browser dependency: `/[bidang]/laporan/[id]/cetak` renders the report
 inside `@page`/`@media print` CSS and the "Cetak / Simpan sebagai PDF" button just invokes
 the browser print dialog (destination "Save as PDF", A4, browser header/footer off). This
 was a deliberate choice to avoid needing Puppeteer/Chromium on serverless Vercel and to
@@ -151,7 +183,7 @@ Structure:
   (DAP, total kerma) and would need their own tables *and* form columns. Only adults have
   2021 TPDI values (`USIA_BER_TPDI`), so paediatric groups compute a typical value with no
   national comparator — that is correct, not a missing lookup.
-- Patient-table columns live in `src/app/(app)/audit-dosis/[id]/kolom.ts` so the client form
+- Patient-table columns live in `src/app/(app)/[bidang]/audit-dosis/[id]/kolom.ts` so the client form
   and the server-rendered read-only/print views share one definition. Columns marked
   `identitas: true` never reach the printed sheet.
 - `hapusIdentitasPasien` (locked audits only) blanks name/code/sex but **keeps age and
@@ -165,6 +197,26 @@ values are issued, replace the tables and `SUMBER_TPDI` — that is following a 
 not fixing a bug.
 
 ### Routing, auth gating, and cache invalidation
+
+**Main tabs are Dashboard | Radiologi | Radioterapi**, and every page except `dashboard/`
+and `profil/` lives under a `src/app/(app)/[bidang]/` segment (`/radiologi/laporan/…`,
+`/radioterapi/alat`). The bidang registry — names, sub-tab menus — is `src/lib/bidang.ts`;
+adding Kedokteran Nuklir is one entry there plus its templates. Build every in-app path with
+`rute(bidang, "/sub")` rather than a string literal. How each page gets its bidang:
+- Lists filter to `jenisAlatBidang(b)` (templates of that bidang); detail pages whose
+  record belongs to another bidang `redirect` there via `bidangDariJenisAlat()` (after the
+  access check, so the redirect doesn't leak existence). Actions derive the bidang from the
+  record's `jenisAlat` the same way.
+- Instansi are shared by all bidang (unfiltered); forms for them post a hidden `bidang`
+  field purely so `bidangDariForm()` can send the user back to the tab they came from.
+- `AlatUkur.bidang` filters the instrument registry and picker (`null` = umum, shown
+  everywhere). The report form's picker always also includes instruments already on the
+  report, whatever their bidang — otherwise saving would silently drop them.
+- Audit dosis exists only under Radiologi: `[bidang]/audit-dosis/layout.tsx` 404s for any
+  bidang whose menu lacks it, and all audit links use `RUTE_AUDIT`.
+- `next.config.ts` 308-redirects the pre-split URLs (`/laporan/…` etc.) to `/radiologi/…`.
+- `bidang` is never stored on `Laporan`/`AlatRadiologi` — it is derived from the template,
+  so moving a template between bidang is a one-line change with no migration.
 
 **There is no `src/middleware.ts`.** Nothing guards routes centrally — `(app)/layout.tsx`
 calls `requireUser()` (which `redirect`s to `/masuk`), and every page under it calls
@@ -191,8 +243,10 @@ reaching for an API you remember from an older version.
 
 Nothing uses route-segment caching config or `use cache`; freshness comes entirely from
 every mutating server action ending in `revalidatePath()` for each list and detail route it
-touches. A new action that omits it leaves stale rows on the dashboard and history pages
-with no other symptom.
+touches — including `/dashboard`, which counts reports and equipment per bidang. For pages
+shared by all bidang, revalidate the pattern (`revalidatePath("/[bidang]/instansi", "page")`)
+rather than one literal path. A new action that omits it leaves stale rows on the dashboard
+and history pages with no other symptom.
 
 ### Layout conventions
 
@@ -217,8 +271,9 @@ for the "nama, gelar" signature line, `teksAtauStrip()` for the empty→`-` conv
 Role badges come from `<LencanaPeran peran={...} />` (`src/components/lencana-peran.tsx`).
 Never derive a badge from `user.admin` — that flag is true for admin *and* master.
 
-Navigation splits at `md`: `NavUtama` renders the horizontal tab strip on desktop only,
-`MenuMobile` renders a hamburger + left drawer below it (both in `src/app/(app)/nav.tsx`).
+Navigation splits at `md`: `NavUtama` renders the horizontal main tabs on desktop only,
+plus a sub-tab strip when the first URL segment is a bidang; `MenuMobile` renders a
+hamburger + left drawer grouped by bidang (both in `src/app/(app)/nav.tsx`).
 Keep **Keluar out of the mobile header** — it previously sat in the cramped top-right
 directly above the tab strip, and users logged themselves out by mistapping it while
 reaching for a tab. It now lives at the bottom of the drawer, separated by a divider.
@@ -236,7 +291,9 @@ of the preview tool; the server is fine. Never "fix" it by switching the cookie 
 is the template key, `konfigurasi` is a per-modality JSON blob) → `Laporan` (report;
 `hasilUji` JSON follows the owning template's schema, `konfigurasiSnapshot` freezes the
 equipment config at report time so later profile edits don't rewrite history). `AlatUkur`
-(measurement-instrument registry) relates to `Laporan` many-to-many via `LaporanAlatUkur`.
+(measurement-instrument registry) relates to `Laporan` many-to-many via `LaporanAlatUkur`;
+its nullable `bidang` only filters where it is listed. `AlatRadiologi` holds radiotherapy
+equipment too — the model name predates the second bidang.
 `AuditDosis` hangs off the same `User`/`Instansi`/`AlatRadiologi` trio (owned via `userId`,
 like `Laporan`, not `createdById`), with `parameter` and `dataPasien` as its JSON columns and
 an optional `laporanSumberId` pointing at the report its tube-output regression came from.
@@ -328,7 +385,7 @@ read as a legacy fallback name when `MASTER_EMAILS` is unset.)
 `Laporan.status` has two values and only one legal transition: `draft` → `selesai`
 ("Simpan Permanen"). There is no way back — not for the owner, not for master. `selesai`
 means signed *and frozen*: `simpanLaporan` rejects every edit to such a report, and
-`/laporan/[id]` renders `baca.tsx` instead of `form.tsx` even for the owner. The point is
+`/[bidang]/laporan/[id]` renders `baca.tsx` instead of `form.tsx` even for the owner. The point is
 that measurements which have been signed must not be quietly adjusted afterwards, which is
 also why `hapusLaporan` lets only master delete a locked report — if the owner could delete
 and recreate, the lock would be theatre.
@@ -355,7 +412,7 @@ record. Locking it is instead what unlocks `hapusIdentitasPasien`.
 **Cross-Fismed access is read-only, by design.** Admin/master may open and print another
 Fismed's report but never edit it — report contents are that Fismed's personal
 measurements (instrument readings, ambient conditions at test time, field notes), so
-nobody else has grounds to alter them. `/laporan/[id]` renders `baca.tsx` (computed
+nobody else has grounds to alter them. `/[bidang]/laporan/[id]` renders `baca.tsx` (computed
 result tables) instead of `form.tsx` for non-owners.
 
 Ownership enforcement is three layers, all required (`src/lib/akses.ts`):

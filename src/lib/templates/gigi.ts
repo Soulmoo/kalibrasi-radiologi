@@ -53,6 +53,7 @@ const KOLOM_DIMENSI = [
 
 export const gigi: Template = {
   key: "gigi-panoramic-cephalometric",
+  bidang: "radiologi",
   nama: "Gigi Panoramic & Cephalometric",
   namaAlat: "Pesawat Sinar-X Gigi Panoramic & Cephalometric",
   judulLaporan: "PESAWAT SINAR-X GIGI PANORAMIC & CEPHALOMETRIC",

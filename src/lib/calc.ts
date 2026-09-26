@@ -391,6 +391,16 @@ export function fmt(v: Angka | undefined, desimal = DESIMAL_TAMPILAN): string {
   return v.toFixed(desimal);
 }
 
+/**
+ * Format dengan jumlah angka penting tetap — untuk besaran yang ordenya
+ * berubah-ubah (mis. dosis 0.006624 Gy/MU), yang kalau ditulis dengan jumlah
+ * desimal tetap akan kehilangan digit bermakna.
+ */
+export function fmtSig(v: Angka | undefined, angkaPenting: number): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "-";
+  return v.toPrecision(angkaPenting);
+}
+
 /** Format persen. */
 export function fmtPersen(v: Angka | undefined, desimal = DESIMAL_TAMPILAN): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "-";

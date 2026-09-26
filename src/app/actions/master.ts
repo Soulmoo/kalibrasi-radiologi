@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { bolehUbah } from "@/lib/akses";
+import { adalahBidang, bidangDariForm, rute } from "@/lib/bidang";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
-import { getTemplate } from "@/lib/templates";
+import { bidangDariJenisAlat, getTemplate } from "@/lib/templates";
 
 export type AksiState = { error?: string; ok?: boolean };
 
@@ -57,23 +58,29 @@ export async function simpanInstansi(
     await prisma.instansi.create({ data: { ...data, createdById: user.id } });
   }
 
-  revalidatePath("/instansi");
-  redirect("/instansi");
+  // Instansi dipakai semua bidang; kembalikan ke bidang asal form.
+  const daftar = rute(bidangDariForm(fd), "/instansi");
+  revalidatePath("/[bidang]/instansi", "page");
+  revalidatePath("/dashboard");
+  redirect(daftar);
 }
 
 export async function hapusInstansi(fd: FormData) {
   const user = await requireUser();
   const id = String(fd.get("id") ?? "");
 
+  const daftar = rute(bidangDariForm(fd), "/instansi");
+
   const ada = await prisma.instansi.findUnique({ where: { id } });
-  if (!ada || !bolehUbah(user, ada.createdById)) redirect("/instansi?error=terlarang");
+  if (!ada || !bolehUbah(user, ada.createdById)) redirect(`${daftar}?error=terlarang`);
 
   const jumlahLaporan = await prisma.laporan.count({ where: { instansiId: id } });
   if (jumlahLaporan > 0) {
-    redirect("/instansi?error=terpakai");
+    redirect(`${daftar}?error=terpakai`);
   }
   await prisma.instansi.delete({ where: { id } });
-  revalidatePath("/instansi");
+  revalidatePath("/[bidang]/instansi", "page");
+  revalidatePath("/dashboard");
 }
 
 /* ---------------- Alat Radiologi ---------------- */
@@ -129,8 +136,10 @@ export async function simpanAlat(_prev: AksiState, fd: FormData): Promise<AksiSt
     await prisma.alatRadiologi.create({ data: { ...data, createdById: user.id } });
   }
 
-  revalidatePath("/alat");
-  redirect("/alat");
+  const daftar = rute(template.bidang, "/alat");
+  revalidatePath(daftar);
+  revalidatePath("/dashboard");
+  redirect(daftar);
 }
 
 export async function hapusAlat(fd: FormData) {
@@ -138,14 +147,18 @@ export async function hapusAlat(fd: FormData) {
   const id = String(fd.get("id") ?? "");
 
   const ada = await prisma.alatRadiologi.findUnique({ where: { id } });
-  if (!ada || !bolehUbah(user, ada.createdById)) redirect("/alat?error=terlarang");
+  if (!ada || !bolehUbah(user, ada.createdById)) {
+    redirect(`${rute(bidangDariForm(fd), "/alat")}?error=terlarang`);
+  }
+  const daftar = rute(bidangDariJenisAlat(ada.jenisAlat), "/alat");
 
   const jumlahLaporan = await prisma.laporan.count({ where: { alatRadiologiId: id } });
   if (jumlahLaporan > 0) {
-    redirect("/alat?error=terpakai");
+    redirect(`${daftar}?error=terpakai`);
   }
   await prisma.alatRadiologi.delete({ where: { id } });
-  revalidatePath("/alat");
+  revalidatePath(daftar);
+  revalidatePath("/dashboard");
 }
 
 /* ---------------- Registry Alat Ukur ---------------- */
@@ -166,6 +179,8 @@ export async function simpanAlatUkur(
     noSeri: teks(fd, "noSeri"),
     tertelusurKe: teks(fd, "tertelusurKe"),
     masaKalibrasiSampai: tanggal(fd, "masaKalibrasiSampai"),
+    // Kosong / tak dikenal = umum, tampil di semua bidang.
+    bidang: adalahBidang(teks(fd, "bidangAlat")) ? teks(fd, "bidangAlat") : null,
   };
 
   if (id) {
@@ -177,8 +192,10 @@ export async function simpanAlatUkur(
     await prisma.alatUkur.create({ data: { ...data, createdById: user.id } });
   }
 
-  revalidatePath("/alat-ukur");
-  redirect("/alat-ukur");
+  const daftar = rute(bidangDariForm(fd), "/alat-ukur");
+  revalidatePath("/[bidang]/alat-ukur", "page");
+  revalidatePath("/dashboard");
+  redirect(daftar);
 }
 
 export async function hapusAlatUkur(fd: FormData) {
@@ -186,8 +203,11 @@ export async function hapusAlatUkur(fd: FormData) {
   const id = String(fd.get("id") ?? "");
 
   const ada = await prisma.alatUkur.findUnique({ where: { id } });
-  if (!ada || !bolehUbah(user, ada.createdById)) redirect("/alat-ukur?error=terlarang");
+  if (!ada || !bolehUbah(user, ada.createdById)) {
+    redirect(`${rute(bidangDariForm(fd), "/alat-ukur")}?error=terlarang`);
+  }
 
   await prisma.alatUkur.delete({ where: { id } });
-  revalidatePath("/alat-ukur");
+  revalidatePath("/[bidang]/alat-ukur", "page");
+  revalidatePath("/dashboard");
 }

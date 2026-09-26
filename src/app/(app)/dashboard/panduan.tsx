@@ -114,11 +114,12 @@ export function PanduanAwal({
         <ol className="mt-2 space-y-2 text-sm">
           <Langkah no={1} judul="Daftarkan instansi / klien">
             Data rumah sakit atau fasilitas yang alatnya dikalibrasi, di menu{" "}
-            <strong>Instansi / Klien</strong>.
+            <strong>Instansi / Klien</strong> pada tab Radiologi atau Radioterapi.
           </Langkah>
-          <Langkah no={2} judul="Daftarkan alat radiologi">
-            Pilih modalitasnya (Radiografi Mobile, CT-Scan, Gigi, Angiografi, C-Arm, MRI).
-            Parameter uji dan rumusnya otomatis mengikuti modalitas yang dipilih.
+          <Langkah no={2} judul="Daftarkan alatnya">
+            Di tab bidangnya: Radiologi (Radiografi Mobile, CT-Scan, Gigi, Angiografi,
+            C-Arm, MRI) atau Radioterapi (LINAC berkas foton, TRS-398). Parameter uji dan
+            rumusnya otomatis mengikuti jenis alat yang dipilih.
           </Langkah>
           <Langkah no={3} judul="Isi registry alat ukur">
             Alat ukur yang Anda pakai beserta masa kalibrasinya, untuk dicantumkan di

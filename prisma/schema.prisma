@@ -111,6 +111,12 @@ model AlatUkur {
   tertelusurKe        String?
   masaKalibrasiSampai DateTime?
 
+  /// Bidang tempat alat ukur ini dipakai: "radiologi" | "radioterapi", atau
+  /// kosong = umum (tampil di semua bidang, mis. thermohygrobarometer). Hanya
+  /// menyaring registry dan pemilih alat ukur di form laporan; tidak ada
+  /// aturan akses yang bergantung padanya. Lihat src/lib/bidang.ts.
+  bidang String?
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   createdById String?

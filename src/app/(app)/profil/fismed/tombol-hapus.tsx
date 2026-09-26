@@ -57,7 +57,7 @@ export function TombolHapusAkun({
 
             <p className="mt-3 text-sm text-[var(--muted)]">
               Ikut terhapus: <strong>{jumlah.laporan} laporan</strong>,{" "}
-              {jumlah.instansi} instansi, {jumlah.alat} alat radiologi, dan{" "}
+              {jumlah.instansi} instansi, {jumlah.alat} alat, dan{" "}
               {jumlah.alatUkur} alat ukur miliknya. Data yang masih dipakai laporan
               Fismed lain tidak dihapus, melainkan dialihkan kepemilikannya kepada Anda.
             </p>

@@ -5,6 +5,10 @@
  * I/UK/B-01 dan CT-Scan I/PK/C-01) agar hasil kalkulasi sistem bisa langsung
  * dibandingkan dengan angka di dokumen aslinya (PRD Fase 0 — validasi rumus).
  *
+ * Bagian radioterapi (LINAC 6 MV) memakai isian spreadsheet IAEA TRS-398
+ * "Absolut 6 MV TRS-398.xlsm" apa adanya, supaya M₁, k_TP, k_pol, dan k_s bisa
+ * dicocokkan langsung. k_Q-nya sengaja berbeda: aplikasi memakai TRS-398 Rev.1.
+ *
  * Jalankan: npm run db:seed
  * Akun contoh: fismed@contoh.local / kalibrasi123
  */
@@ -33,6 +37,9 @@ async function main() {
     where: { namaInstansi: "PT. Affinity Health Indonesia" },
   });
   if (lama) {
+    // Audit dosis ikut dihapus dulu — foreign key-nya menahan penghapusan alat
+    // dan instansi kalau akun contoh pernah dipakai membuat audit.
+    await prisma.auditDosis.deleteMany({ where: { instansiId: lama.id } });
     await prisma.laporan.deleteMany({ where: { instansiId: lama.id } });
     await prisma.alatRadiologi.deleteMany({ where: { instansiId: lama.id } });
     await prisma.instansi.delete({ where: { id: lama.id } });
@@ -58,7 +65,8 @@ async function main() {
 
   /* ---------------- Registry alat ukur ---------------- */
 
-  const alatUkurData = [
+  // bidang: null = umum (tampil di Radiologi maupun Radioterapi).
+  const alatUkurRadiologi = [
     { nama: "Collimator Test Tool", merek: "RMI", modelTipe: "161B", noSeri: "161B-9602" },
     { nama: "Beam Alignment Test Tool", merek: "RMI", modelTipe: "162A", noSeri: "162A-8166" },
     {
@@ -117,9 +125,30 @@ async function main() {
     },
   ];
 
+  const alatUkurRadioterapi = [
+    // Chamber, elektrometer, dan laboratorium kalibrasinya dari xlsm.
+    { nama: "Ion Chamber Farmer", merek: "PTW", modelTipe: "30013", noSeri: "2971", tertelusurKe: "BATAN" },
+    { nama: "Elektrometer", merek: "PTW", modelTipe: "TANDEM", tertelusurKe: "BATAN" },
+    { nama: "Water Phantom", merek: "PTW" },
+    { nama: "Termometer Air Phantom" },
+    { nama: "Barometer Digital" },
+  ];
+
+  const alatUkurData = [
+    ...alatUkurRadiologi.map((a) => ({
+      ...a,
+      bidang: a.nama === "Thermohygrobarometer" ? null : "radiologi",
+    })),
+    ...alatUkurRadioterapi.map((a) => ({ ...a, bidang: "radioterapi" })),
+  ];
+
   const alatUkur: Record<string, string> = {};
   for (const a of alatUkurData) {
-    const ada = await prisma.alatUkur.findFirst({ where: { nama: a.nama } });
+    // Dicari di registry akun contoh saja — di database bersama, alat ukur
+    // Fismed lain yang kebetulan bernama sama tidak boleh ikut tertimpa.
+    const ada = await prisma.alatUkur.findFirst({
+      where: { nama: a.nama, createdById: user.id },
+    });
     const rec = ada
       ? await prisma.alatUkur.update({ where: { id: ada.id }, data: a })
       : await prisma.alatUkur.create({ data: { ...a, createdById: user.id } });
@@ -912,6 +941,104 @@ async function main() {
           },
         ],
       },
+    },
+  });
+
+
+  /* ---------------- Radioterapi: LINAC berkas foton 6 MV (TRS-398) ---------------- */
+
+  const isian = (o: Record<string, string>) => ({
+    meta: {},
+    rows: Object.entries(o).map(([_key, nilai]) => ({ _key, nilai })),
+  });
+
+  await buatLaporan({
+    jenisAlat: "linac-foton",
+    namaAlat: "LINAC Precise — R. Bunker 1",
+    lokasiUnit: "R. Bunker 1",
+    merk: "Elekta",
+    model: "Precise",
+    noSeri: "SN109055",
+    nomorLaporan: "RT/TRS398/6MV/VIII/25",
+    tanggalUji: "2025-08-20",
+    metodeKerja: "IAEA TRS-398 Rev.1 (2024) — Bagian 6",
+    konfigurasi: {
+      lin_merk: "Elekta",
+      lin_model: "Precise",
+      lin_seri: "SN109055",
+      lin_foton: "6 MV",
+      lin_fff: "Tidak",
+    },
+    // Hasil hitung dengan isian ini: D(z_max) ≈ 0,974 cGy/MU, deviasi ≈ −2,6 %.
+    // N_D,w 0,05 Gy/rdg dan TPR 0,60 berasal dari xlsm dan tampaknya nilai
+    // sementara; batas 3 % murni contoh supaya laporan tampil lengkap.
+    kesimpulan:
+      "Pesawat LINAC (Berkas Foton) dinyatakan Laik Pakai untuk parameter uji di atas.",
+    alatUkurDipakai: [
+      "Ion Chamber Farmer",
+      "Elektrometer",
+      "Water Phantom",
+      "Termometer Air Phantom",
+      "Barometer Digital",
+    ],
+    hasilUji: {
+      "kondisi-lingkungan": {
+        meta: {},
+        rows: [
+          { _key: "suhu", hasil: "", satuan: "ᴼC", ketidakpastian: "-" },
+          { _key: "kelembaban", hasil: "50.30", satuan: "% RH", ketidakpastian: "± 0.0" },
+          { _key: "tekanan", hasil: "932.00", satuan: "mb", ketidakpastian: "± 0.0" },
+        ],
+      },
+      "rt-kondisi-acuan": isian({
+        energi: "6",
+        mode: "WFF",
+        lajuDosis: "600",
+        tpr: "0.60",
+        setup: "SSD",
+        jarak: "100",
+        lapangan: "10 × 10",
+        zref: "10",
+        phantom: "Air",
+      }),
+      "rt-chamber": isian({
+        model: "PTW 30013 Farmer",
+        seri: "2971",
+        ndw: "0.05",
+        satuanNdw: "Gy/rdg",
+        q0: "Co-60",
+        kedalamanKal: "5",
+        p0: "101.325",
+        t0: "20",
+        rh0: "50",
+        v1: "300",
+        polKal: "Terkoreksi efek polaritas",
+        polUser: "Positif",
+        lab: "BATAN",
+      }),
+      "rt-elektrometer": isian({
+        model: "PTW TANDEM",
+        terpisah: "Tidak",
+        range: "LOW",
+        kelec: "1",
+      }),
+      "rt-bacaan": isian({
+        bacaan: "24.387",
+        mu: "200",
+        p: "93.2",
+        t: "19.8",
+        rh: "50.3",
+        bacaanLawan: "24.4",
+        v2: "100",
+        m2: "24.273",
+        jenisBerkas: "Pulsed",
+      }),
+      "rt-zmax": isian({
+        zmax: "1",
+        pdd: "68",
+        acuan: "1.000",
+        batas: "3",
+      }),
     },
   });
 

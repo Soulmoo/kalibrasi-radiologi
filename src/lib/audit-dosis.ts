@@ -13,6 +13,7 @@
  * pengulangan pencitraan).
  */
 
+import { rute } from "@/lib/bidang";
 import type { Angka } from "@/lib/calc";
 import {
   BSF_RADIOGRAFI_UMUM,
@@ -35,6 +36,13 @@ import {
 } from "@/lib/tpdi";
 
 /* ---------------- Status & konstanta ---------------- */
+
+/**
+ * Audit dosis hanya ada di bidang Radiologi — TPDI adalah tingkat panduan
+ * untuk radiologi diagnostik (lihat BIDANG di src/lib/bidang.ts). Semua link
+ * dan redirect audit dosis dibangun dari konstanta ini.
+ */
+export const RUTE_AUDIT = rute("radiologi", "/audit-dosis");
 
 export const STATUS_DRAF = "draft";
 export const STATUS_PERMANEN = "selesai";
